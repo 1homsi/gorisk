@@ -51,6 +51,7 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: gorisk.sarif
+          category: gorisk
 
   release:
     name: Build & Release
