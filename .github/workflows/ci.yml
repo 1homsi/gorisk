@@ -27,6 +27,8 @@ jobs:
   scan:
     name: Gorisk Self-Scan
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
@@ -43,3 +45,13 @@ jobs:
 
       - name: Full scan
         run: ./gorisk scan ./...
+
+      - name: Generate SARIF
+        if: always()
+        run: ./gorisk scan ./... --sarif > gorisk.sarif || true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gorisk.sarif
