@@ -44,11 +44,11 @@ jobs:
         run: ./gorisk capabilities ./... || true
 
       - name: Full scan
-        run: ./gorisk scan ./... --policy .gorisk-policy.json
+        run: ./gorisk scan --policy .gorisk-policy.json ./...
 
       - name: Generate SARIF
         if: always()
-        run: ./gorisk scan ./... --policy .gorisk-policy.json --sarif > gorisk.sarif || true
+        run: ./gorisk scan --policy .gorisk-policy.json --sarif ./... > gorisk.sarif || true
 
       - name: Upload SARIF
         if: always()
