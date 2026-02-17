@@ -26,6 +26,7 @@ jobs:
 
   scan:
     name: Gorisk Self-Scan
+    needs: [build]
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -55,3 +56,56 @@ jobs:
         uses: github/codeql-action/upload-sarif@v4
         with:
           sarif_file: gorisk.sarif
+
+  release:
+    name: Build & Release
+    needs: [scan]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Set version
+        id: version
+        run: |
+          VERSION="v0.0.0-$(date -u '+%Y%m%d')-$(git rev-parse --short HEAD)"
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Build binaries
+        run: |
+          mkdir -p dist
+          PLATFORMS=(
+            "linux/amd64"
+            "linux/arm64"
+            "darwin/amd64"
+            "darwin/arm64"
+            "windows/amd64"
+          )
+          for PLATFORM in "${PLATFORMS[@]}"; do
+            OS="${PLATFORM%/*}"
+            ARCH="${PLATFORM#*/}"
+            BIN="dist/gorisk_${OS}_${ARCH}"
+            [ "$OS" = "windows" ] && BIN="${BIN}.exe"
+            GOOS=$OS GOARCH=$ARCH CGO_ENABLED=0 go build -ldflags="-s -w -X main.version=${{ steps.version.outputs.VERSION }}" -o "$BIN" ./cmd/gorisk
+          done
+          cd dist && for f in *; do tar -czf "${f}.tar.gz" "$f" && rm "$f"; done
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ steps.version.outputs.VERSION }}"
+          NOTES="Automated release from commit ${GITHUB_SHA::7} on \`main\`."
+          gh release create "$VERSION" dist/*.tar.gz \
+            --title "$VERSION" \
+            --notes "$NOTES" \
+            --latest
