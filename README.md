@@ -1,8 +1,6 @@
 # gorisk
 
-<p align="center">
-  <img src="assets/gorisk.png" alt="gorisk" width="200"/>
-</p>
+<img src="assets/gorisk.png" alt="gorisk" width="200"/>
 
 Go dependency risk analyzer. Maps what your dependencies **can do**, not just what CVEs they have.
 

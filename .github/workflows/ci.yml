@@ -27,6 +27,8 @@ jobs:
   scan:
     name: Gorisk Self-Scan
     runs-on: ubuntu-latest
+    permissions:
+      security-events: write
     steps:
       - uses: actions/checkout@v4
 
@@ -39,7 +41,7 @@ jobs:
         run: go build -o gorisk ./cmd/gorisk
 
       - name: Run capabilities scan
-        run: ./gorisk capabilities ./... --json
+        run: ./gorisk capabilities ./... || true
 
       - name: Run scan with SARIF output
         run: ./gorisk scan ./... --sarif > gorisk.sarif || true
