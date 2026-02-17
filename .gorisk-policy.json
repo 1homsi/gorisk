@@ -1,0 +1,8 @@
+{
+  "fail_on": "high",
+  "max_health_score": 30,
+  "exclude_packages": [
+    "github.com/1homsi/gorisk/internal/upgrade",
+    "github.com/1homsi/gorisk/internal/graph"
+  ]
+}

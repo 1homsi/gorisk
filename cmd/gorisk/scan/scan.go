@@ -13,8 +13,9 @@ import (
 )
 
 type policy struct {
-	FailOn         string `json:"fail_on"`
-	MaxHealthScore int    `json:"max_health_score"`
+	FailOn          string   `json:"fail_on"`
+	MaxHealthScore  int      `json:"max_health_score"`
+	ExcludePackages []string `json:"exclude_packages"`
 }
 
 func Run(args []string) int {
@@ -45,6 +46,11 @@ func Run(args []string) int {
 		if p.FailOn != "" {
 			*failOn = p.FailOn
 		}
+	}
+
+	excluded := make(map[string]bool, len(p.ExcludePackages))
+	for _, pkg := range p.ExcludePackages {
+		excluded[pkg] = true
 	}
 
 	g, err := graph.Load(dir)
@@ -87,6 +93,9 @@ func Run(args []string) int {
 
 	failLevel := riskValue(*failOn)
 	for _, cr := range capReports {
+		if excluded[cr.Package] {
+			continue
+		}
 		pkg := g.Packages[cr.Package]
 		if pkg == nil || pkg.Module == nil || !pkg.Module.Main {
 			continue
