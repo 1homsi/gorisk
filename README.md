@@ -68,6 +68,41 @@ gorisk impact golang.org/x/tools
 gorisk impact --json golang.org/x/tools
 ```
 
+### `gorisk graph`
+
+Compute transitive risk scores across the full dependency tree. Shows direct, transitive, and effective risk with depth-weighted scoring.
+
+```bash
+gorisk graph ./...
+gorisk graph --min-risk medium ./...
+gorisk graph --json ./...
+```
+
+Output columns: Module | Direct score | Transitive score | Effective score | Depth | Risk level
+
+### `gorisk sbom`
+
+Export a CycloneDX 1.4 SBOM with capabilities, health score, and risk level per component.
+
+```bash
+gorisk sbom ./... > sbom.json
+gorisk sbom --format cyclonedx ./...
+```
+
+Integrates with enterprise security platforms (Dependency-Track, etc.).
+
+### `gorisk licenses`
+
+Detect license risk across dependencies via GitHub API.
+
+```bash
+gorisk licenses ./...
+gorisk licenses --fail-on-risky ./...   # exit 1 if GPL/AGPL/unknown found
+gorisk licenses --json ./...
+```
+
+Flags risky licenses: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-2.1, LGPL-3.0 and unknown licenses.
+
 ### `gorisk scan`
 
 Full scan: capabilities + health scoring + CI gate.

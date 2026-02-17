@@ -6,9 +6,12 @@ import (
 
 	"github.com/1homsi/gorisk/cmd/gorisk/capabilities"
 	"github.com/1homsi/gorisk/cmd/gorisk/diff"
+	graphcmd "github.com/1homsi/gorisk/cmd/gorisk/graph"
 	"github.com/1homsi/gorisk/cmd/gorisk/impact"
+	"github.com/1homsi/gorisk/cmd/gorisk/licenses"
 	goriskpr "github.com/1homsi/gorisk/cmd/gorisk/pr"
 	goriskreach "github.com/1homsi/gorisk/cmd/gorisk/reachability"
+	"github.com/1homsi/gorisk/cmd/gorisk/sbom"
 	"github.com/1homsi/gorisk/cmd/gorisk/scan"
 	"github.com/1homsi/gorisk/cmd/gorisk/upgrade"
 )
@@ -36,6 +39,12 @@ func main() {
 		os.Exit(goriskreach.Run(os.Args[2:]))
 	case "pr":
 		os.Exit(goriskpr.Run(os.Args[2:]))
+	case "graph":
+		os.Exit(graphcmd.Run(os.Args[2:]))
+	case "sbom":
+		os.Exit(sbom.Run(os.Args[2:]))
+	case "licenses":
+		os.Exit(licenses.Run(os.Args[2:]))
 	case "version":
 		fmt.Println(version)
 	default:
@@ -56,5 +65,8 @@ Usage:
   gorisk scan           [--json] [--sarif] [--fail-on low|medium|high] [--policy file.json] [pattern]
   gorisk reachability   [--json] [--min-risk low|medium|high] [pattern]
   gorisk pr             [--json] [--base ref] [--head ref]
+  gorisk graph          [--json] [--min-risk low|medium|high] [pattern]
+  gorisk sbom           [--format cyclonedx] [pattern]
+  gorisk licenses       [--json] [--fail-on-risky] [pattern]
   gorisk version`)
 }
