@@ -1,0 +1,133 @@
+package upgrade
+
+import (
+	"bytes"
+	"encoding/json"
+	"fmt"
+	"os"
+	"os/exec"
+
+	"github.com/1homsi/gorisk/internal/capability"
+)
+
+type CapDiff struct {
+	Package   string
+	Added     capability.CapabilitySet
+	Removed   capability.CapabilitySet
+	Escalated bool
+}
+
+func DiffCapabilities(modulePath, oldVersion, newVersion string) ([]CapDiff, error) {
+	oldDir, err := os.MkdirTemp("", "gorisk-old-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(oldDir)
+
+	newDir, err := os.MkdirTemp("", "gorisk-new-*")
+	if err != nil {
+		return nil, err
+	}
+	defer os.RemoveAll(newDir)
+
+	if err := scaffoldTempModule(oldDir, modulePath, oldVersion); err != nil {
+		return nil, fmt.Errorf("scaffold old: %w", err)
+	}
+	if err := scaffoldTempModule(newDir, modulePath, newVersion); err != nil {
+		return nil, fmt.Errorf("scaffold new: %w", err)
+	}
+
+	oldCaps, err := scanDirCapabilities(oldDir, modulePath)
+	if err != nil {
+		return nil, fmt.Errorf("scan old: %w", err)
+	}
+	newCaps, err := scanDirCapabilities(newDir, modulePath)
+	if err != nil {
+		return nil, fmt.Errorf("scan new: %w", err)
+	}
+
+	return buildDiffs(oldCaps, newCaps), nil
+}
+
+func scanDirCapabilities(dir, modulePath string) (map[string]capability.CapabilitySet, error) {
+	cmd := exec.Command("go", "list", "-json", "-deps", modulePath+"/...")
+	cmd.Dir = dir
+	out, err := cmd.Output()
+	if err != nil {
+		return nil, err
+	}
+
+	caps := make(map[string]capability.CapabilitySet)
+	dec := json.NewDecoder(bytes.NewReader(out))
+	for dec.More() {
+		var p struct {
+			ImportPath string   `json:"ImportPath"`
+			Dir        string   `json:"Dir"`
+			GoFiles    []string `json:"GoFiles"`
+			Standard   bool     `json:"Standard"`
+			Module     *struct {
+				Path string `json:"Path"`
+			} `json:"Module"`
+		}
+		if err := dec.Decode(&p); err != nil {
+			continue
+		}
+		if p.Standard || p.Dir == "" || len(p.GoFiles) == 0 {
+			continue
+		}
+		if p.Module == nil || p.Module.Path != modulePath {
+			continue
+		}
+		cs, err := capability.DetectPackage(p.Dir, p.GoFiles)
+		if err != nil {
+			continue
+		}
+		caps[p.ImportPath] = cs
+	}
+	return caps, nil
+}
+
+func buildDiffs(oldCaps, newCaps map[string]capability.CapabilitySet) []CapDiff {
+	allPkgs := make(map[string]struct{})
+	for p := range oldCaps {
+		allPkgs[p] = struct{}{}
+	}
+	for p := range newCaps {
+		allPkgs[p] = struct{}{}
+	}
+
+	var diffs []CapDiff
+	for pkg := range allPkgs {
+		old := oldCaps[pkg]
+		nw := newCaps[pkg]
+
+		var added, removed capability.CapabilitySet
+		var c capability.Capability = 1
+		for c != 0 && c <= capability.CapPlugin {
+			if nw.Has(c) && !old.Has(c) {
+				added.Add(c)
+			}
+			if old.Has(c) && !nw.Has(c) {
+				removed.Add(c)
+			}
+			c <<= 1
+		}
+
+		if added.Caps == 0 && removed.Caps == 0 {
+			continue
+		}
+
+		escalated := added.Has(capability.CapExec) ||
+			added.Has(capability.CapNetwork) ||
+			added.Has(capability.CapUnsafe) ||
+			added.Has(capability.CapPlugin)
+
+		diffs = append(diffs, CapDiff{
+			Package:   pkg,
+			Added:     added,
+			Removed:   removed,
+			Escalated: escalated,
+		})
+	}
+	return diffs
+}

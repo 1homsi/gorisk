@@ -1,0 +1,9 @@
+#!/usr/bin/env bash
+set -e
+
+if ! command -v golangci-lint &>/dev/null; then
+  echo "golangci-lint not found — run: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"
+  exit 1
+fi
+
+golangci-lint run ./...

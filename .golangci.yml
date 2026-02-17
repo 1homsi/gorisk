@@ -1,0 +1,28 @@
+version: "2"
+
+linters:
+  enable:
+    - gosec
+    - errorlint
+    - bodyclose
+
+  disable:
+    - errcheck
+
+  settings:
+    gosec:
+      excludes:
+        - G204
+        - G304
+        - G104
+
+formatters:
+  enable:
+    - gofmt
+    - goimports
+
+issues:
+  exclude-rules:
+    - path: _test\.go
+      linters:
+        - errcheck
