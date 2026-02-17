@@ -12,6 +12,7 @@
     "github.com/1homsi/gorisk/internal/health",
     "github.com/1homsi/gorisk/internal/license",
     "github.com/1homsi/gorisk/internal/prdiff",
-    "github.com/1homsi/gorisk/internal/reachability"
+    "github.com/1homsi/gorisk/internal/reachability",
+    "github.com/1homsi/gorisk/cmd/gorisk/trace"
   ]
 }
