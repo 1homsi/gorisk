@@ -7,13 +7,16 @@ import (
 	"github.com/1homsi/gorisk/cmd/gorisk/capabilities"
 	"github.com/1homsi/gorisk/cmd/gorisk/diff"
 	graphcmd "github.com/1homsi/gorisk/cmd/gorisk/graph"
+	"github.com/1homsi/gorisk/cmd/gorisk/history"
 	"github.com/1homsi/gorisk/cmd/gorisk/impact"
 	"github.com/1homsi/gorisk/cmd/gorisk/licenses"
 	goriskpr "github.com/1homsi/gorisk/cmd/gorisk/pr"
 	goriskreach "github.com/1homsi/gorisk/cmd/gorisk/reachability"
 	"github.com/1homsi/gorisk/cmd/gorisk/sbom"
 	"github.com/1homsi/gorisk/cmd/gorisk/scan"
+	"github.com/1homsi/gorisk/cmd/gorisk/trace"
 	"github.com/1homsi/gorisk/cmd/gorisk/upgrade"
+	"github.com/1homsi/gorisk/cmd/gorisk/viz"
 )
 
 var version = "dev"
@@ -45,6 +48,12 @@ func main() {
 		os.Exit(sbom.Run(os.Args[2:]))
 	case "licenses":
 		os.Exit(licenses.Run(os.Args[2:]))
+	case "viz":
+		os.Exit(viz.Run(os.Args[2:]))
+	case "trace":
+		os.Exit(trace.Run(os.Args[2:]))
+	case "history":
+		os.Exit(history.Run(os.Args[2:]))
 	case "version":
 		fmt.Println(version)
 	default:
@@ -68,5 +77,8 @@ Usage:
   gorisk graph          [--json] [--min-risk low|medium|high] [pattern]
   gorisk sbom           [--format cyclonedx] [pattern]
   gorisk licenses       [--json] [--fail-on-risky] [pattern]
+  gorisk viz            [--min-risk low|medium|high] > graph.html
+  gorisk trace          [--timeout 10s] [--json] <package> [args...]
+  gorisk history        [record|diff|show] [--json]
   gorisk version`)
 }
