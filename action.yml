@@ -1,0 +1,59 @@
+name: 'gorisk'
+description: 'Go dependency risk analyzer — detect risky capabilities and policy violations'
+
+inputs:
+  fail-on:
+    description: 'Minimum risk level that causes the action to fail (low|medium|high)'
+    required: false
+    default: 'high'
+  policy-file:
+    description: 'Path to a policy JSON file (relative to repo root)'
+    required: false
+    default: ''
+  sarif:
+    description: 'Upload SARIF results to the GitHub Security tab'
+    required: false
+    default: 'true'
+
+outputs:
+  passed:
+    description: 'true if the scan passed, false otherwise'
+    value: ${{ steps.scan.outputs.passed }}
+  sarif-file:
+    description: 'Path to the generated SARIF file'
+    value: ${{ steps.scan.outputs.sarif-file }}
+
+runs:
+  using: 'composite'
+  steps:
+    - name: Install gorisk
+      shell: bash
+      run: cd "$GITHUB_ACTION_PATH" && go install ./cmd/gorisk
+
+    - name: Run gorisk scan
+      id: scan
+      shell: bash
+      run: |
+        SARIF_FILE="gorisk-results.sarif"
+        SCAN_ARGS="--fail-on ${{ inputs.fail-on }}"
+        if [ -n "${{ inputs.policy-file }}" ]; then
+          SCAN_ARGS="$SCAN_ARGS --policy ${{ inputs.policy-file }}"
+        fi
+
+        gorisk scan --sarif $SCAN_ARGS > "$SARIF_FILE"
+        EXIT=$?
+
+        echo "sarif-file=$SARIF_FILE" >> "$GITHUB_OUTPUT"
+        if [ $EXIT -eq 0 ]; then
+          echo "passed=true" >> "$GITHUB_OUTPUT"
+        else
+          echo "passed=false" >> "$GITHUB_OUTPUT"
+          exit $EXIT
+        fi
+
+    - name: Upload SARIF to GitHub Security
+      if: ${{ inputs.sarif == 'true' && always() }}
+      uses: github/codeql-action/upload-sarif@v3
+      with:
+        sarif_file: ${{ steps.scan.outputs.sarif-file }}
+        category: gorisk
