@@ -75,23 +75,15 @@ jobs:
           BUILD_RESULT: ${{ needs.build.result }}
           SCAN_RESULT: ${{ needs.scan.result }}
         run: |
-          icon() { [ "$1" = "success" ] && echo "✅" || echo "❌"; }
-          BUILD_ICON=$(icon "$BUILD_RESULT")
-          SCAN_ICON=$(icon "$SCAN_RESULT")
-
+          BUILD_ICON=$([ "$BUILD_RESULT" = "success" ] && echo "✅" || echo "❌")
+          SCAN_ICON=$([ "$SCAN_RESULT" = "success" ] && echo "✅" || echo "❌")
           if [ "$BUILD_RESULT" = "success" ] && [ "$SCAN_RESULT" = "success" ]; then
             SUMMARY="All checks passed."
           else
             SUMMARY="One or more checks failed."
           fi
-
-          BODY="### gorisk CI — $SUMMARY
-
-| Check | Result |
-|-------|--------|
-| Build & Test | $BUILD_ICON \`$BUILD_RESULT\` |
-| Gorisk Self-Scan | $SCAN_ICON \`$SCAN_RESULT\` |
-
-_Commit: \`${GITHUB_SHA::7}\`_"
-
-          gh pr comment "$PR_NUMBER" --repo "$REPO" --body "$BODY"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          printf '### gorisk CI — %s\n\n| Check | Result |\n|-------|--------|\n| Build & Test | %s `%s` |\n| Gorisk Self-Scan | %s `%s` |\n\n_Commit: `%s`_\n' \
+            "$SUMMARY" "$BUILD_ICON" "$BUILD_RESULT" "$SCAN_ICON" "$SCAN_RESULT" "$SHORT_SHA" \
+            > /tmp/comment.md
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file /tmp/comment.md
