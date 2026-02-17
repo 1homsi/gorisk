@@ -77,7 +77,25 @@ jobs:
       - name: Set version
         id: version
         run: |
-          VERSION="v0.0.0-$(date -u '+%Y%m%d')-$(git rev-parse --short HEAD)"
+          LATEST=$(git tag --list | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | sort -V | tail -1)
+          if [ -z "$LATEST" ]; then
+            VERSION="v0.0.1"
+          else
+            SEMVER="${LATEST#v}"
+            MAJOR=$(echo "$SEMVER" | cut -d. -f1)
+            MINOR=$(echo "$SEMVER" | cut -d. -f2)
+            PATCH=$(echo "$SEMVER" | cut -d. -f3)
+            PATCH=$((PATCH + 1))
+            if [ "$PATCH" -ge 10 ]; then
+              PATCH=0
+              MINOR=$((MINOR + 1))
+            fi
+            if [ "$MINOR" -ge 10 ]; then
+              MINOR=0
+              MAJOR=$((MAJOR + 1))
+            fi
+            VERSION="v${MAJOR}.${MINOR}.${PATCH}"
+          fi
           echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
 
       - name: Build binaries
