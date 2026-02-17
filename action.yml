@@ -14,10 +14,6 @@ inputs:
     description: 'Upload SARIF results to the GitHub Security tab'
     required: false
     default: 'true'
-  version:
-    description: 'gorisk version to install (e.g. v0.1.0 or latest)'
-    required: false
-    default: 'latest'
 
 outputs:
   passed:
@@ -32,14 +28,7 @@ runs:
   steps:
     - name: Install gorisk
       shell: bash
-      run: |
-        if command -v gorisk &>/dev/null; then
-          echo "Using pre-installed gorisk: $(gorisk version)"
-        elif [ "${{ inputs.version }}" = "latest" ]; then
-          go install github.com/1homsi/gorisk/cmd/gorisk@latest
-        else
-          go install github.com/1homsi/gorisk/cmd/gorisk@${{ inputs.version }}
-        fi
+      run: cd "$GITHUB_ACTION_PATH" && go install ./cmd/gorisk
 
     - name: Run gorisk scan
       id: scan

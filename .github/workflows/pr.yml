@@ -40,11 +40,8 @@ jobs:
           go-version: "1.22"
           cache: true
 
-      - name: Build gorisk from current checkout
-        run: go build -o $(go env GOPATH)/bin/gorisk ./cmd/gorisk
-
       - name: Self-scan with gorisk action
-        uses: ./
+        uses: 1homsi/gorisk@main
         with:
           fail-on: high
           policy-file: .gorisk-policy.json
