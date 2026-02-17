@@ -1,6 +1,10 @@
 name: 'gorisk'
 description: 'Go dependency risk analyzer — detect risky capabilities and policy violations'
 
+branding:
+  icon: 'shield'
+  color: 'red'
+
 inputs:
   fail-on:
     description: 'Minimum risk level that causes the action to fail (low|medium|high)'
