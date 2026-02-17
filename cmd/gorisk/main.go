@@ -7,6 +7,8 @@ import (
 	"github.com/1homsi/gorisk/cmd/gorisk/capabilities"
 	"github.com/1homsi/gorisk/cmd/gorisk/diff"
 	"github.com/1homsi/gorisk/cmd/gorisk/impact"
+	goriskpr "github.com/1homsi/gorisk/cmd/gorisk/pr"
+	goriskreach "github.com/1homsi/gorisk/cmd/gorisk/reachability"
 	"github.com/1homsi/gorisk/cmd/gorisk/scan"
 	"github.com/1homsi/gorisk/cmd/gorisk/upgrade"
 )
@@ -30,6 +32,10 @@ func main() {
 		os.Exit(impact.Run(os.Args[2:]))
 	case "scan":
 		os.Exit(scan.Run(os.Args[2:]))
+	case "reachability":
+		os.Exit(goriskreach.Run(os.Args[2:]))
+	case "pr":
+		os.Exit(goriskpr.Run(os.Args[2:]))
 	case "version":
 		fmt.Println(version)
 	default:
@@ -43,10 +49,12 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `gorisk — Go dependency risk analyzer
 
 Usage:
-  gorisk capabilities [--json] [--min-risk low|medium|high] [pattern]
-  gorisk diff         [--json] <module@old> <module@new>
-  gorisk upgrade      [--json] <module@version>
-  gorisk impact       [--json] <module[@version]>
-  gorisk scan         [--json] [--sarif] [--fail-on low|medium|high] [--policy file.json] [pattern]
+  gorisk capabilities   [--json] [--min-risk low|medium|high] [pattern]
+  gorisk diff           [--json] <module@old> <module@new>
+  gorisk upgrade        [--json] <module@version>
+  gorisk impact         [--json] <module[@version]>
+  gorisk scan           [--json] [--sarif] [--fail-on low|medium|high] [--policy file.json] [pattern]
+  gorisk reachability   [--json] [--min-risk low|medium|high] [pattern]
+  gorisk pr             [--json] [--base ref] [--head ref]
   gorisk version`)
 }

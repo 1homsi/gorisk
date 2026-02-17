@@ -12,10 +12,20 @@ import (
 	"github.com/1homsi/gorisk/internal/report"
 )
 
+type PolicyException struct {
+	Package      string   `json:"package"`
+	Capabilities []string `json:"capabilities"`
+}
+
 type policy struct {
-	FailOn          string   `json:"fail_on"`
-	MaxHealthScore  int      `json:"max_health_score"`
-	ExcludePackages []string `json:"exclude_packages"`
+	FailOn           string            `json:"fail_on"`
+	MaxHealthScore   int               `json:"max_health_score"`
+	MinHealthScore   int               `json:"min_health_score"`
+	BlockArchived    bool              `json:"block_archived"`
+	DenyCapabilities []string          `json:"deny_capabilities"`
+	AllowExceptions  []PolicyException `json:"allow_exceptions"`
+	MaxDepDepth      int               `json:"max_dep_depth"`
+	ExcludePackages  []string          `json:"exclude_packages"`
 }
 
 func Run(args []string) int {
@@ -51,6 +61,20 @@ func Run(args []string) int {
 	excluded := make(map[string]bool, len(p.ExcludePackages))
 	for _, pkg := range p.ExcludePackages {
 		excluded[pkg] = true
+	}
+
+	exceptions := make(map[string]map[string]bool)
+	for _, ex := range p.AllowExceptions {
+		caps := make(map[string]bool)
+		for _, c := range ex.Capabilities {
+			caps[strings.ToLower(c)] = true
+		}
+		exceptions[ex.Package] = caps
+	}
+
+	deniedCaps := make(map[string]bool)
+	for _, c := range p.DenyCapabilities {
+		deniedCaps[strings.ToLower(c)] = true
 	}
 
 	g, err := graph.Load(dir)
@@ -92,6 +116,7 @@ func Run(args []string) int {
 	}
 
 	failLevel := riskValue(*failOn)
+
 	for _, cr := range capReports {
 		if excluded[cr.Package] {
 			continue
@@ -100,10 +125,40 @@ func Run(args []string) int {
 		if pkg == nil || pkg.Module == nil || !pkg.Module.Main {
 			continue
 		}
+
 		if riskValue(cr.RiskLevel) >= failLevel {
 			sr.Passed = false
 			sr.FailReason = fmt.Sprintf("package %s has %s risk capabilities", cr.Package, cr.RiskLevel)
 			break
+		}
+
+		if len(deniedCaps) > 0 {
+			exCaps := exceptions[cr.Package]
+			for _, capName := range cr.Capabilities.List() {
+				if deniedCaps[strings.ToLower(capName)] && !exCaps[strings.ToLower(capName)] {
+					sr.Passed = false
+					sr.FailReason = fmt.Sprintf("package %s uses denied capability: %s", cr.Package, capName)
+					break
+				}
+			}
+			if !sr.Passed {
+				break
+			}
+		}
+	}
+
+	if sr.Passed {
+		for _, hr := range healthReports {
+			if p.BlockArchived && hr.Archived {
+				sr.Passed = false
+				sr.FailReason = fmt.Sprintf("module %s is archived", hr.Module)
+				break
+			}
+			if p.MinHealthScore > 0 && hr.Score < p.MinHealthScore {
+				sr.Passed = false
+				sr.FailReason = fmt.Sprintf("module %s health score %d is below minimum %d", hr.Module, hr.Score, p.MinHealthScore)
+				break
+			}
 		}
 	}
 
