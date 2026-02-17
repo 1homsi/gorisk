@@ -79,14 +79,55 @@ gorisk scan --fail-on medium ./...
 gorisk scan --policy policy.json ./...
 ```
 
+### `gorisk reachability` ⚡ unique
+
+Uses callgraph analysis (RTA) to determine whether risky capabilities are **actually reachable** from your `main` functions — not just imported. Eliminates false positives.
+
+```bash
+gorisk reachability ./...
+gorisk reachability --min-risk high ./...
+gorisk reachability --json ./...
+```
+
+### `gorisk pr`
+
+Detects dependency changes between two git refs and reports new capabilities, capability escalation, and removed modules. Designed for PR checks.
+
+```bash
+gorisk pr                              # diffs origin/main...HEAD
+gorisk pr --base origin/main --head HEAD
+gorisk pr --json
+```
+
+Exits 1 if a new HIGH risk dependency was introduced.
+
 ### Policy file
 
 ```json
 {
-  "fail_on": "medium",
-  "max_health_score": 40
+  "fail_on": "high",
+  "max_health_score": 30,
+  "min_health_score": 0,
+  "block_archived": false,
+  "deny_capabilities": ["exec", "plugin"],
+  "allow_exceptions": [
+    { "package": "github.com/my/tool", "capabilities": ["exec"] }
+  ],
+  "max_dep_depth": 0,
+  "exclude_packages": []
 }
 ```
+
+| Field | Description |
+|-------|-------------|
+| `fail_on` | Fail on risk level: `low`, `medium`, `high` |
+| `max_health_score` | Fail if health score exceeds this (legacy) |
+| `min_health_score` | Fail if health score is below this |
+| `block_archived` | Fail if any dep is archived on GitHub |
+| `deny_capabilities` | Block packages with these capabilities |
+| `allow_exceptions` | Per-package exemptions for denied caps |
+| `max_dep_depth` | Maximum allowed dependency depth (0 = unlimited) |
+| `exclude_packages` | Packages to skip entirely |
 
 ## Setup
 
