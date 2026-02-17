@@ -64,7 +64,7 @@ func WriteScanSARIF(w io.Writer, r ScanReport) error {
 		{ID: "GORISK002", Name: "UnhealthyDependency", ShortDescription: sarifMessage{Text: "Dependency has poor health score"}},
 	}
 
-	var results []sarifResult
+	results := make([]sarifResult, 0)
 
 	for _, cr := range r.Capabilities {
 		if cr.RiskLevel != "HIGH" {
