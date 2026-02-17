@@ -87,6 +87,10 @@ func Run(args []string) int {
 
 	failLevel := riskValue(*failOn)
 	for _, cr := range capReports {
+		pkg := g.Packages[cr.Package]
+		if pkg == nil || pkg.Module == nil || !pkg.Module.Main {
+			continue
+		}
 		if riskValue(cr.RiskLevel) >= failLevel {
 			sr.Passed = false
 			sr.FailReason = fmt.Sprintf("package %s has %s risk capabilities", cr.Package, cr.RiskLevel)

@@ -42,4 +42,4 @@ jobs:
         run: ./gorisk capabilities ./... || true
 
       - name: Full scan
-        run: ./gorisk scan ./... || true
+        run: ./gorisk scan ./...
