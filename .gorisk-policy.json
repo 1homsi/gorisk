@@ -1,6 +1,11 @@
 {
   "fail_on": "high",
   "max_health_score": 30,
+  "min_health_score": 0,
+  "block_archived": false,
+  "deny_capabilities": [],
+  "allow_exceptions": [],
+  "max_dep_depth": 0,
   "exclude_packages": [
     "github.com/1homsi/gorisk/internal/upgrade",
     "github.com/1homsi/gorisk/internal/graph",
