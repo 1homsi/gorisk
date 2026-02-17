@@ -3,12 +3,10 @@ name: CI
 on:
   push:
     branches: [main]
-  pull_request:
-    branches: [main]
 
 jobs:
   build:
-    name: Build & Test
+    name: Build
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -20,9 +18,6 @@ jobs:
 
       - name: Build
         run: go build ./...
-
-      - name: Test
-        run: go test ./...
 
   scan:
     name: Gorisk Self-Scan
@@ -60,7 +55,6 @@ jobs:
   release:
     name: Build & Release
     needs: [scan]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     permissions:
       contents: write

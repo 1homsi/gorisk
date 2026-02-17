@@ -1,0 +1,56 @@
+name: PR Checks
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Build
+        run: go build ./...
+
+      - name: Test
+        run: go test ./...
+
+  scan:
+    name: Gorisk Self-Scan
+    needs: [build]
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+          cache: true
+
+      - name: Build gorisk
+        run: go build -o gorisk ./cmd/gorisk
+
+      - name: Capabilities scan
+        run: ./gorisk capabilities ./... || true
+
+      - name: Full scan
+        run: ./gorisk scan --policy .gorisk-policy.json ./...
+
+      - name: Generate SARIF
+        if: always()
+        run: ./gorisk scan --policy .gorisk-policy.json --sarif ./... > gorisk.sarif || true
+
+      - name: Upload SARIF
+        if: always()
+        uses: github/codeql-action/upload-sarif@v4
+        with:
+          sarif_file: gorisk.sarif
