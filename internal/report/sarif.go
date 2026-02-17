@@ -66,6 +66,12 @@ func WriteScanSARIF(w io.Writer, r ScanReport) error {
 
 	results := make([]sarifResult, 0)
 
+	gomodLoc := []sarifLocation{
+		{PhysicalLocation: sarifPhysicalLocation{
+			ArtifactLocation: sarifArtifactLocation{URI: "go.mod"},
+		}},
+	}
+
 	for _, cr := range r.Capabilities {
 		if cr.RiskLevel != "HIGH" {
 			continue
@@ -77,6 +83,7 @@ func WriteScanSARIF(w io.Writer, r ScanReport) error {
 				Text: fmt.Sprintf("Package %s has HIGH risk capabilities: %s (score=%d)",
 					cr.Package, cr.Capabilities.String(), cr.Capabilities.Score),
 			},
+			Locations: gomodLoc,
 		})
 	}
 
@@ -90,6 +97,7 @@ func WriteScanSARIF(w io.Writer, r ScanReport) error {
 			Message: sarifMessage{
 				Text: fmt.Sprintf("Module %s has low health score: %d", hr.Module, hr.Score),
 			},
+			Locations: gomodLoc,
 		})
 	}
 
