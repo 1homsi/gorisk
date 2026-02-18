@@ -17,9 +17,11 @@
   <div id="hdr-right">
     <button id="edge-toggle" title="Toggle edge visibility">⬡ Edges</button>
     <input id="search" type="text" placeholder="Search packages…">
+    <button id="settings-btn" title="Settings">⚙</button>
   </div>
 </div>
 
+<div id="mode-bar"></div>
 <div id="notice"></div>
 <canvas id="c"></canvas>
 
@@ -28,6 +30,37 @@
   <div id="tip-mod"></div>
   <div class="tip-grid" id="tip-grid"></div>
   <div id="tip-caps"></div>
+</div>
+
+<div id="sp">
+  <div class="sp-head">
+    <span>Settings</span>
+    <button id="sp-close">×</button>
+  </div>
+  <div class="sp-section">
+    <div class="sp-label">Appearance</div>
+    <label class="sp-row"><input type="checkbox" id="s-dark"> Dark mode</label>
+    <label class="sp-row"><input type="checkbox" id="s-hulls"> Module cluster hulls</label>
+  </div>
+  <div class="sp-section">
+    <div class="sp-label">Graph</div>
+    <label class="sp-row"><input type="checkbox" id="s-entry"> Entry points only</label>
+    <label class="sp-row"><input type="checkbox" id="s-connected"> Connected only</label>
+    <label class="sp-row"><input type="checkbox" id="s-edgewt"> Edge weight by imports</label>
+    <label class="sp-row"><input type="checkbox" id="s-copy"> Copy path on click</label>
+  </div>
+  <div class="sp-section">
+    <div class="sp-label">Mode</div>
+    <div class="mode-group">
+      <button class="mode-btn active" data-mode="normal">Normal</button>
+      <button class="mode-btn" data-mode="blast">Blast radius</button>
+      <button class="mode-btn" data-mode="path">Path finder</button>
+    </div>
+  </div>
+  <div class="sp-section">
+    <div class="sp-label">Capability filter</div>
+    <div id="sp-caps"></div>
+  </div>
 </div>
 
 <div id="ctrl">
