@@ -232,14 +232,28 @@ func WriteImpact(w io.Writer, r ImpactReport) {
 }
 
 // WriteTaintFindings prints the taint flow findings section.
+// Rows are deduplicated by (module, source, sink) so each unique flow appears once.
 func WriteTaintFindings(w io.Writer, findings []taint.TaintFinding) {
 	if len(findings) == 0 {
 		return
 	}
+
+	// Deduplicate by (module, source, sink) keeping the first occurrence (highest risk first).
+	type key struct{ module, source, sink string }
+	seen := make(map[key]bool, len(findings))
+	deduped := findings[:0:0]
+	for _, f := range findings {
+		k := key{f.Module, f.Source, f.Sink}
+		if !seen[k] {
+			seen[k] = true
+			deduped = append(deduped, f)
+		}
+	}
+
 	fmt.Fprintf(w, "%s%s=== Taint Flows ===%s\n\n", colorBold, colorCyan, colorReset)
 
 	modW := len("MODULE")
-	for _, f := range findings {
+	for _, f := range deduped {
 		if l := len(f.Module); l > modW {
 			modW = l
 		}
@@ -249,7 +263,7 @@ func WriteTaintFindings(w io.Writer, findings []taint.TaintFinding) {
 		modW = maxMod
 	}
 
-	for _, f := range findings {
+	for _, f := range deduped {
 		color := riskColor(f.Risk)
 		mod := f.Module
 		if len(mod) > modW {
