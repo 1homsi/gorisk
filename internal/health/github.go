@@ -22,7 +22,9 @@ type ghRelease struct {
 
 type osvResponse struct {
 	Vulns []struct {
-		ID string `json:"id"`
+		ID      string   `json:"id"`
+		Aliases []string `json:"aliases"`
+		Summary string   `json:"summary"`
 	} `json:"vulns"`
 }
 
@@ -89,18 +91,22 @@ func fetchGHReleases(owner, repo string) ([]ghRelease, error) {
 	return releases, nil
 }
 
-func fetchOSVVulns(modulePath string) (int, error) {
+func fetchOSVVulns(modulePath string) ([]string, error) {
 	body := strings.NewReader(fmt.Sprintf(`{"package":{"name":%q,"ecosystem":"Go"}}`, modulePath))
 	resp, err := http.Post("https://api.osv.dev/v1/query", "application/json", body)
 	if err != nil {
-		return 0, err
+		return nil, err
 	}
 	defer resp.Body.Close()
 	var out osvResponse
 	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-		return 0, err
+		return nil, err
 	}
-	return len(out.Vulns), nil
+	ids := make([]string, 0, len(out.Vulns))
+	for _, v := range out.Vulns {
+		ids = append(ids, v.ID)
+	}
+	return ids, nil
 }
 
 func githubOwnerRepo(modulePath string) (string, string, bool) {

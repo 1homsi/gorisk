@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/health"
 	"github.com/1homsi/gorisk/internal/report"
 	"github.com/1homsi/gorisk/internal/sbom"
@@ -15,6 +15,7 @@ import (
 func Run(args []string) int {
 	fs := flag.NewFlagSet("sbom", flag.ExitOnError)
 	format := fs.String("format", "cyclonedx", "output format: cyclonedx")
+	lang := fs.String("lang", "auto", "language analyzer: auto|go|node")
 	fs.Parse(args)
 
 	if *format != "cyclonedx" {
@@ -28,7 +29,12 @@ func Run(args []string) int {
 		return 2
 	}
 
-	g, err := graph.Load(dir)
+	a, err := analyzer.ForLang(*lang, dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	g, err := a.Load(dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "load graph:", err)
 		return 2

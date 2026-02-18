@@ -57,10 +57,11 @@ func Score(modulePath, version string) report.HealthReport {
 		}
 	}
 
-	cveCount, err := fetchOSVVulns(modulePath)
+	cveIDs, err := fetchOSVVulns(modulePath)
 	if err == nil {
-		hr.CVECount = cveCount
-		penalty := -30 * cveCount
+		hr.CVECount = len(cveIDs)
+		hr.CVEs = cveIDs
+		penalty := -30 * len(cveIDs)
 		hr.Score += penalty
 		hr.Signals["cve_count"] = penalty
 	}

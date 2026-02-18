@@ -15,6 +15,7 @@ type HealthReport struct {
 	Score    int
 	Archived bool
 	CVECount int
+	CVEs     []string
 	Signals  map[string]int
 }
 

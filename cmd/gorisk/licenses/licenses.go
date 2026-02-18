@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/license"
 )
 
@@ -14,6 +14,7 @@ func Run(args []string) int {
 	fs := flag.NewFlagSet("licenses", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "JSON output")
 	failOnRisky := fs.Bool("fail-on-risky", false, "exit 1 if any risky license found")
+	lang := fs.String("lang", "auto", "language analyzer: auto|go|node")
 	fs.Parse(args)
 
 	dir, err := os.Getwd()
@@ -22,7 +23,12 @@ func Run(args []string) int {
 		return 2
 	}
 
-	g, err := graph.Load(dir)
+	a, err := analyzer.ForLang(*lang, dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	g, err := a.Load(dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "load graph:", err)
 		return 2

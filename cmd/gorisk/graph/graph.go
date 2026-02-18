@@ -8,7 +8,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/transitive"
 )
 
@@ -16,6 +16,7 @@ func Run(args []string) int {
 	fs := flag.NewFlagSet("graph", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "JSON output")
 	minRisk := fs.String("min-risk", "low", "minimum risk level to show: low|medium|high")
+	lang := fs.String("lang", "auto", "language analyzer: auto|go|node")
 	fs.Parse(args)
 
 	dir, err := os.Getwd()
@@ -24,7 +25,12 @@ func Run(args []string) int {
 		return 2
 	}
 
-	g, err := graph.Load(dir)
+	a, err := analyzer.ForLang(*lang, dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	g, err := a.Load(dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "load graph:", err)
 		return 2
