@@ -46,8 +46,9 @@ type ImpactReport struct {
 }
 
 type ScanReport struct {
-	Capabilities []CapabilityReport
-	Health       []HealthReport
-	Passed       bool
-	FailReason   string
+	GraphChecksum string `json:"graph_checksum,omitempty"`
+	Capabilities  []CapabilityReport
+	Health        []HealthReport
+	Passed        bool
+	FailReason    string
 }

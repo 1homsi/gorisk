@@ -1,6 +1,10 @@
 package transitive
 
-import "github.com/1homsi/gorisk/internal/graph"
+import (
+	"sort"
+
+	"github.com/1homsi/gorisk/internal/graph"
+)
 
 type ModuleRisk struct {
 	Module          string
@@ -44,11 +48,18 @@ func ComputeTransitiveRisk(g *graph.DependencyGraph) []ModuleRisk {
 
 	modDeps := buildModuleDeps(g)
 
-	var results []ModuleRisk
-	for _, mod := range g.Modules {
-		if mod.Main {
-			continue
+	// Sort module keys for deterministic output
+	modKeys := make([]string, 0, len(g.Modules))
+	for k, mod := range g.Modules {
+		if !mod.Main {
+			modKeys = append(modKeys, k)
 		}
+	}
+	sort.Strings(modKeys)
+
+	var results []ModuleRisk
+	for _, modPath := range modKeys {
+		mod := g.Modules[modPath]
 		direct := moduleMaxCap[mod.Path]
 		transitive := computeTransitiveScore(mod.Path, moduleMaxCap, modDeps, make(map[string]bool))
 		effective := direct + transitive/2

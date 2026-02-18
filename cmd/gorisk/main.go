@@ -6,6 +6,7 @@ import (
 
 	"github.com/1homsi/gorisk/cmd/gorisk/capabilities"
 	"github.com/1homsi/gorisk/cmd/gorisk/diff"
+	"github.com/1homsi/gorisk/cmd/gorisk/explain"
 	graphcmd "github.com/1homsi/gorisk/cmd/gorisk/graph"
 	"github.com/1homsi/gorisk/cmd/gorisk/history"
 	"github.com/1homsi/gorisk/cmd/gorisk/impact"
@@ -30,6 +31,8 @@ func main() {
 	switch os.Args[1] {
 	case "capabilities":
 		os.Exit(capabilities.Run(os.Args[2:]))
+	case "explain":
+		os.Exit(explain.Run(os.Args[2:]))
 	case "diff":
 		os.Exit(diff.Run(os.Args[2:]))
 	case "upgrade":
@@ -67,18 +70,19 @@ func usage() {
 	fmt.Fprintln(os.Stderr, `gorisk — Go dependency risk analyzer
 
 Usage:
-  gorisk capabilities   [--json] [--min-risk low|medium|high] [pattern]
+  gorisk capabilities   [--json] [--min-risk low|medium|high] [--lang auto|go|node]
+  gorisk explain        [--json] [--cap <name>] [--lang auto|go|node]
   gorisk diff           [--json] <module@old> <module@new>
   gorisk upgrade        [--json] <module@version>
   gorisk impact         [--json] <module[@version]>
-  gorisk scan           [--json] [--sarif] [--fail-on low|medium|high] [--policy file.json] [pattern]
-  gorisk reachability   [--json] [--min-risk low|medium|high] [pattern]
+  gorisk scan           [--json] [--sarif] [--fail-on low|medium|high] [--policy file.json] [--timings]
+  gorisk reachability   [--json] [--min-risk low|medium|high] [--entry file] [--lang auto|go|node]
   gorisk pr             [--json] [--base ref] [--head ref]
   gorisk graph          [--json] [--min-risk low|medium|high] [pattern]
   gorisk sbom           [--format cyclonedx] [pattern]
   gorisk licenses       [--json] [--fail-on-risky] [pattern]
   gorisk viz            [--min-risk low|medium|high] > graph.html
   gorisk trace          [--timeout 10s] [--json] <package> [args...]
-  gorisk history        [record|diff|show] [--json]
+  gorisk history        [record|diff|show|trend] [--json]
   gorisk version`)
 }

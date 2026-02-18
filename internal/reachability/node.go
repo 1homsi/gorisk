@@ -19,7 +19,7 @@ var (
 // analyzeNode scans the project's own source files to determine which
 // installed npm packages are actually imported ("reachable"), and returns
 // their capability sets from the dependency graph.
-func analyzeNode(dir string) ([]ReachabilityReport, error) {
+func analyzeNode(dir, entryFile string) ([]ReachabilityReport, error) {
 	adapter := &node.Adapter{}
 	g, err := adapter.Load(dir)
 	if err != nil {
@@ -27,7 +27,16 @@ func analyzeNode(dir string) ([]ReachabilityReport, error) {
 	}
 
 	// Collect all imports made by the project's own source files.
-	imported := collectProjectImports(dir)
+	var imported map[string]bool
+	if entryFile != "" {
+		entryPath := entryFile
+		if !filepath.IsAbs(entryFile) {
+			entryPath = filepath.Join(dir, entryFile)
+		}
+		imported = collectFileImports(entryPath)
+	} else {
+		imported = collectProjectImports(dir)
+	}
 
 	// Walk all packages in the graph; a package is "reachable" if the project
 	// directly imports it (or transitively via another reachable package).
@@ -56,6 +65,32 @@ func analyzeNode(dir string) ([]ReachabilityReport, error) {
 	}
 
 	return reports, nil
+}
+
+// collectFileImports scans a single JS/TS file and returns the set of bare
+// module specifiers that are imported.
+func collectFileImports(path string) map[string]bool {
+	imported := make(map[string]bool)
+	f, err := os.Open(path)
+	if err != nil {
+		return imported
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
+	for scanner.Scan() {
+		line := scanner.Text()
+		for _, re := range []*regexp.Regexp{reRequire, reImportFrom, reImportDyn} {
+			for _, m := range re.FindAllStringSubmatch(line, -1) {
+				if len(m) > 1 {
+					pkg := bareModuleName(m[1])
+					imported[pkg] = true
+				}
+			}
+		}
+	}
+	return imported
 }
 
 // collectProjectImports scans the project's own JS/TS source files (excluding

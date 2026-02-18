@@ -1,6 +1,7 @@
 package goadapter
 
 import (
+	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -10,7 +11,7 @@ import (
 	"github.com/1homsi/gorisk/internal/capability"
 )
 
-// DetectFile parses a single Go source file and returns its capability set.
+// DetectFile parses a single Go source file and returns its capability set with evidence.
 func DetectFile(fpath string, fset *token.FileSet) (capability.CapabilitySet, error) {
 	if fset == nil {
 		fset = token.NewFileSet()
@@ -27,7 +28,14 @@ func DetectFile(fpath string, fset *token.FileSet) (capability.CapabilitySet, er
 	for _, imp := range f.Imports {
 		path := strings.Trim(imp.Path.Value, `"`)
 		for _, c := range GoPatterns.Imports[path] {
-			cs.Add(c)
+			pos := fset.Position(imp.Path.Pos())
+			cs.AddWithEvidence(c, capability.CapabilityEvidence{
+				File:       pos.Filename,
+				Line:       pos.Line,
+				Context:    fmt.Sprintf("import %q", path),
+				Via:        "import",
+				Confidence: 0.90,
+			})
 		}
 		localName := filepath.Base(path)
 		if imp.Name != nil {
@@ -57,8 +65,16 @@ func DetectFile(fpath string, fset *token.FileSet) (capability.CapabilitySet, er
 			return true
 		}
 		pkgShort := filepath.Base(pkgPath)
-		for _, c := range GoPatterns.CallSites[pkgShort+"."+funcName] {
-			cs.Add(c)
+		pattern := pkgShort + "." + funcName
+		for _, c := range GoPatterns.CallSites[pattern] {
+			pos := fset.Position(call.Pos())
+			cs.AddWithEvidence(c, capability.CapabilityEvidence{
+				File:       pos.Filename,
+				Line:       pos.Line,
+				Context:    pattern,
+				Via:        "callSite",
+				Confidence: 0.60,
+			})
 		}
 		return true
 	})
@@ -66,7 +82,8 @@ func DetectFile(fpath string, fset *token.FileSet) (capability.CapabilitySet, er
 	return cs, nil
 }
 
-// DetectPackage runs DetectFile over all Go files in a package directory.
+// DetectPackage runs DetectFile over all Go files in a package directory,
+// merging capabilities and evidence from each file.
 func DetectPackage(dir string, goFiles []string) (capability.CapabilitySet, error) {
 	fset := token.NewFileSet()
 	var cs capability.CapabilitySet
@@ -76,7 +93,7 @@ func DetectPackage(dir string, goFiles []string) (capability.CapabilitySet, erro
 		if err != nil {
 			continue
 		}
-		cs.Merge(fileCaps)
+		cs.MergeWithEvidence(fileCaps)
 	}
 	return cs, nil
 }

@@ -5,7 +5,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
+	"time"
 
 	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/capability"
@@ -19,6 +21,7 @@ type PolicyException struct {
 }
 
 type policy struct {
+	Version          int               `json:"version"`
 	FailOn           string            `json:"fail_on"`
 	MaxHealthScore   int               `json:"max_health_score"`
 	MinHealthScore   int               `json:"min_health_score"`
@@ -36,6 +39,7 @@ func Run(args []string) int {
 	failOn := fs.String("fail-on", "high", "fail on risk level: low|medium|high")
 	policyFile := fs.String("policy", "", "policy JSON file")
 	lang := fs.String("lang", "auto", "language analyzer: auto|go|node")
+	timings := fs.Bool("timings", false, "print per-phase timing breakdown after output")
 	fs.Parse(args)
 
 	dir, err := os.Getwd()
@@ -59,6 +63,10 @@ func Run(args []string) int {
 			return 2
 		}
 		f.Close()
+		if p.Version != 0 && p.Version != 1 {
+			fmt.Fprintf(os.Stderr, "policy: unsupported version %d (supported: 1)\n", p.Version)
+			return 2
+		}
 		if p.FailOn != "" {
 			switch p.FailOn {
 			case "low", "medium", "high":
@@ -94,14 +102,27 @@ func Run(args []string) int {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
 	}
+
+	// Phase: load graph
+	t0 := time.Now()
 	g, err := a.Load(dir)
+	loadDur := time.Since(t0)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "load graph:", err)
 		return 2
 	}
 
+	// Phase: build capability reports (sorted for determinism)
+	t1 := time.Now()
+	pkgKeys := make([]string, 0, len(g.Packages))
+	for k := range g.Packages {
+		pkgKeys = append(pkgKeys, k)
+	}
+	sort.Strings(pkgKeys)
+
 	var capReports []report.CapabilityReport
-	for _, pkg := range g.Packages {
+	for _, pkgKey := range pkgKeys {
+		pkg := g.Packages[pkgKey]
 		riskLevel := pkg.Capabilities.RiskLevel()
 		modPath := ""
 		if pkg.Module != nil {
@@ -114,7 +135,10 @@ func Run(args []string) int {
 			RiskLevel:    riskLevel,
 		})
 	}
+	capDur := time.Since(t1)
 
+	// Phase: health scoring
+	t2 := time.Now()
 	seen := make(map[string]bool)
 	var mods []health.ModuleRef
 	for _, mod := range g.Modules {
@@ -124,12 +148,14 @@ func Run(args []string) int {
 		seen[mod.Path] = true
 		mods = append(mods, health.ModuleRef{Path: mod.Path, Version: mod.Version})
 	}
-	healthReports := health.ScoreAll(mods)
+	healthReports, healthTiming := health.ScoreAll(mods)
+	healthDur := time.Since(t2)
 
 	sr := report.ScanReport{
-		Capabilities: capReports,
-		Health:       healthReports,
-		Passed:       true,
+		GraphChecksum: g.Checksum(),
+		Capabilities:  capReports,
+		Health:        healthReports,
+		Passed:        true,
 	}
 
 	failLevel := capability.RiskValue(*failOn)
@@ -179,6 +205,8 @@ func Run(args []string) int {
 		}
 	}
 
+	// Phase: output formatting
+	t3 := time.Now()
 	var writeErr error
 	switch {
 	case *sarifOut:
@@ -186,15 +214,40 @@ func Run(args []string) int {
 	case *jsonOut:
 		writeErr = report.WriteScanJSON(os.Stdout, sr)
 	default:
+		fmt.Fprintf(os.Stdout, "graph checksum: %s\n\n", sr.GraphChecksum)
 		report.WriteScan(os.Stdout, sr)
 	}
+	outDur := time.Since(t3)
+
 	if writeErr != nil {
 		fmt.Fprintln(os.Stderr, "write output:", writeErr)
 		return 2
+	}
+
+	if *timings {
+		total := loadDur + capDur + healthDur + outDur
+		fmt.Fprintln(os.Stdout)
+		fmt.Fprintln(os.Stdout, "=== Timings ===")
+		fmt.Fprintf(os.Stdout, "%-25s  %s\n", "graph load", fmtDur(loadDur))
+		fmt.Fprintf(os.Stdout, "%-25s  %s\n", "capability detect", fmtDur(capDur))
+		fmt.Fprintf(os.Stdout, "%-25s  %s  (%d modules, %d workers)\n",
+			"health scoring", fmtDur(healthDur), healthTiming.ModuleCount, healthTiming.Workers)
+		fmt.Fprintf(os.Stdout, "  %-23s  %s  (%d calls)\n", "github API", fmtDur(healthTiming.GithubTime), healthTiming.GithubCalls)
+		fmt.Fprintf(os.Stdout, "  %-23s  %s  (%d calls)\n", "osv API", fmtDur(healthTiming.OsvTime), healthTiming.OsvCalls)
+		fmt.Fprintf(os.Stdout, "%-25s  %s\n", "output formatting", fmtDur(outDur))
+		fmt.Fprintln(os.Stdout, strings.Repeat("─", 40))
+		fmt.Fprintf(os.Stdout, "%-25s  %s\n", "total", fmtDur(total))
 	}
 
 	if !sr.Passed {
 		return 1
 	}
 	return 0
+}
+
+func fmtDur(d time.Duration) string {
+	if d < time.Millisecond {
+		return fmt.Sprintf("%.2fms", float64(d.Microseconds())/1000)
+	}
+	return fmt.Sprintf("%.2fs", d.Seconds())
 }
