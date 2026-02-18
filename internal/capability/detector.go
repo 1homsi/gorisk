@@ -23,8 +23,7 @@ func DetectFile(fpath string, fset *token.FileSet) (CapabilitySet, error) {
 
 	for _, imp := range f.Imports {
 		path := strings.Trim(imp.Path.Value, `"`)
-		caps := ImportCapabilities(path)
-		for _, c := range caps {
+		for _, c := range GoPatterns.Imports[path] {
 			cs.Add(c)
 		}
 		localName := filepath.Base(path)
@@ -55,8 +54,7 @@ func DetectFile(fpath string, fset *token.FileSet) (CapabilitySet, error) {
 			return true
 		}
 		pkgShort := filepath.Base(pkgPath)
-		caps := CallCapabilities(pkgShort, funcName)
-		for _, c := range caps {
+		for _, c := range GoPatterns.CallSites[pkgShort+"."+funcName] {
 			cs.Add(c)
 		}
 		return true

@@ -1,0 +1,109 @@
+# Capability patterns for Node.js
+#
+# Covers CommonJS require(), ESM import from '', and dynamic import() calls.
+# node: prefix variants are included for Node 18+ explicit built-in imports.
+# Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+#
+# To add a pattern: append an entry to imports or call_sites and open a PR.
+
+name: node
+
+# import_patterns: npm package / Node built-in name → capabilities
+imports:
+  # Filesystem
+  fs:                [fs:read, fs:write]
+  node:fs:           [fs:read, fs:write]
+  fs/promises:       [fs:read, fs:write]
+  node:fs/promises:  [fs:read, fs:write]
+  path:              [fs:read]
+  node:path:         [fs:read]
+  readline:          [fs:read]
+  node:readline:     [fs:read]
+
+  # Environment
+  os:                [env]
+  node:os:           [env]
+  process:           [env]
+  node:process:      [env]
+
+  # Process execution
+  child_process:       [exec]
+  node:child_process:  [exec]
+  worker_threads:      [exec]
+  node:worker_threads: [exec]
+  cluster:             [exec]
+  node:cluster:        [exec]
+
+  # Network
+  net:               [network]
+  node:net:          [network]
+  http:              [network]
+  node:http:         [network]
+  https:             [network]
+  node:https:        [network]
+  tls:               [network, crypto]
+  node:tls:          [network, crypto]
+  dgram:             [network]
+  node:dgram:        [network]
+
+  # Crypto
+  crypto:            [crypto]
+  node:crypto:       [crypto]
+
+  # Unsafe / sandbox escape
+  vm:                [unsafe]
+  node:vm:           [unsafe]
+
+  # Dynamic loading / plugins
+  module:            [plugin]
+  node:module:       [plugin]
+
+# call_sites: substring patterns matched against each source line
+call_sites:
+  # Code execution / sandbox escape
+  "eval(":                [unsafe]
+  "new Function(":        [unsafe]
+  "vm.runInNewContext(":  [unsafe]
+  "vm.runInThisContext(": [unsafe]
+  "require('vm')":        [unsafe]
+
+  # Process execution
+  "exec(":                [exec]
+  "execSync(":            [exec]
+  "execFile(":            [exec]
+  "execFileSync(":        [exec]
+  "spawn(":               [exec]
+  "spawnSync(":           [exec]
+  "fork(":                [exec]
+
+  # Network
+  "fetch(":               [network]
+  "axios.":               [network]
+  "request(":             [network]
+  "got(":                 [network]
+
+  # Filesystem reads
+  "readFile":             [fs:read]
+  "readFileSync":         [fs:read]
+  "readdir":              [fs:read]
+  "readdirSync":          [fs:read]
+
+  # Filesystem writes
+  "writeFile":            [fs:write]
+  "writeFileSync":        [fs:write]
+  "appendFile":           [fs:write]
+  "appendFileSync":       [fs:write]
+  "unlink(":              [fs:write]
+  "unlinkSync(":          [fs:write]
+  "rmdir(":               [fs:write]
+  "rmdirSync(":           [fs:write]
+  "mkdir(":               [fs:write]
+  "mkdirSync(":           [fs:write]
+
+  # Environment
+  "process.env":          [env]
+
+  # Dynamic loading
+  "createRequire(":       [plugin]

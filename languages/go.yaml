@@ -1,0 +1,76 @@
+# Capability patterns for Go
+#
+# Capabilities (see internal/capability/types.go for weights and risk thresholds):
+#   fs:read   – reads from the filesystem
+#   fs:write  – writes or deletes files
+#   network   – makes outbound network connections
+#   exec      – spawns subprocesses or shell commands
+#   env       – reads environment variables
+#   unsafe    – bypasses memory / type safety
+#   crypto    – uses cryptographic primitives
+#   reflect   – uses runtime reflection
+#   plugin    – loads or executes external code at runtime
+#
+# To add a pattern: append an entry to imports or call_sites and open a PR.
+
+name: go
+
+# import_patterns: Go import path → capabilities granted by that package
+imports:
+  os:                    [fs:read, fs:write, env]
+  io/ioutil:             [fs:read, fs:write]
+  io/fs:                 [fs:read]
+  net:                   [network]
+  net/http:              [network]
+  net/rpc:               [network]
+  net/smtp:              [network]
+  os/exec:               [exec]
+  syscall:               [exec, fs:read, fs:write]
+  golang.org/x/sys/unix: [exec, fs:read, fs:write]
+  unsafe:                [unsafe]
+  reflect:               [reflect]
+  plugin:                [plugin]
+  crypto:                [crypto]
+  crypto/tls:            [crypto, network]
+  crypto/rsa:            [crypto]
+  crypto/aes:            [crypto]
+  crypto/sha256:         [crypto]
+  crypto/sha512:         [crypto]
+  crypto/md5:            [crypto]
+  crypto/hmac:           [crypto]
+  crypto/ecdsa:          [crypto]
+  crypto/ed25519:        [crypto]
+  crypto/rand:           [crypto]
+  crypto/x509:           [crypto]
+
+# call_sites: package.Function call pattern → capabilities
+# Key format: <pkg-base>.<FuncName>  (e.g. "exec.Command" for os/exec.Command)
+call_sites:
+  os.Open:             [fs:read]
+  os.OpenFile:         [fs:read, fs:write]
+  os.ReadFile:         [fs:read]
+  os.WriteFile:        [fs:write]
+  os.Create:           [fs:write]
+  os.Mkdir:            [fs:write]
+  os.MkdirAll:         [fs:write]
+  os.Remove:           [fs:write]
+  os.RemoveAll:        [fs:write]
+  os.Rename:           [fs:write]
+  os.Getenv:           [env]
+  os.LookupEnv:        [env]
+  os.Environ:          [env]
+  os.Setenv:           [env]
+  ioutil.ReadFile:     [fs:read]
+  ioutil.WriteFile:    [fs:write]
+  ioutil.TempFile:     [fs:write]
+  ioutil.TempDir:      [fs:write]
+  exec.Command:        [exec]
+  exec.CommandContext: [exec]
+  syscall.Exec:        [exec]
+  syscall.ForkExec:    [exec]
+  http.Get:            [network]
+  http.Post:           [network]
+  http.ListenAndServe: [network]
+  net.Dial:            [network]
+  net.Listen:          [network]
+  tls.Dial:            [network, crypto]
