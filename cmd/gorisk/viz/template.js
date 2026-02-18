@@ -567,8 +567,9 @@ function draw() {
   const vNodes = visibleNodes();
   const vSet = new Set(vNodes.map(n => n.id));
 
-  // ── module cluster hulls ──
-  if (S.hulls) {
+  // ── module cluster hulls (hide during any active selection so they don't stretch) ──
+  const hullsActive = S.hulls && !selected && !blastSet && !pathA;
+  if (hullsActive) {
     const byMod = {};
     for (const n of vNodes) { (byMod[n.module] || (byMod[n.module] = [])).push({ x: n.x, y: n.y }); }
     for (const [mod, pts] of Object.entries(byMod)) {
