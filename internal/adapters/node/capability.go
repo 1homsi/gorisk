@@ -11,6 +11,9 @@ import (
 	"github.com/1homsi/gorisk/internal/capability"
 )
 
+// nodePatterns is the Node.js PatternSet loaded from languages/node.yaml.
+var nodePatterns = capability.MustLoadPatterns("node")
+
 var (
 	reRequire    = regexp.MustCompile(`require\(['"]([^'"]+)['"]\)`)
 	reImportFrom = regexp.MustCompile(`from\s+['"]([^'"]+)['"]`)
@@ -29,7 +32,6 @@ func Detect(dir string) capability.CapabilitySet {
 			return nil
 		}
 		if info.IsDir() {
-			// Skip nested node_modules to avoid scanning transitive deps twice
 			if info.Name() == "node_modules" {
 				return filepath.SkipDir
 			}
@@ -53,7 +55,6 @@ func scanFile(path string, caps *capability.CapabilitySet) {
 	defer f.Close()
 
 	scanner := bufio.NewScanner(f)
-	// Increase buffer for long minified lines
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 
 	for scanner.Scan() {
@@ -70,7 +71,7 @@ func scanFile(path string, caps *capability.CapabilitySet) {
 			caps.Add(capability.CapPlugin)
 		}
 
-		for pattern, patCaps := range callPatterns {
+		for pattern, patCaps := range nodePatterns.CallSites {
 			if strings.Contains(line, pattern) {
 				for _, c := range patCaps {
 					caps.Add(c)
@@ -81,10 +82,8 @@ func scanFile(path string, caps *capability.CapabilitySet) {
 }
 
 func applyImportCaps(importPath string, caps *capability.CapabilitySet) {
-	if capList, ok := importPatterns[importPath]; ok {
-		for _, c := range capList {
-			caps.Add(c)
-		}
+	for _, c := range nodePatterns.Imports[importPath] {
+		caps.Add(c)
 	}
 }
 

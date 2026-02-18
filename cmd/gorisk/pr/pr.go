@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/1homsi/gorisk/internal/prdiff"
+	"github.com/1homsi/gorisk/internal/analyzer"
 )
 
 func Run(args []string) int {
@@ -15,9 +15,20 @@ func Run(args []string) int {
 	jsonOut := fs.Bool("json", false, "JSON output")
 	base := fs.String("base", "origin/main", "base ref to diff against")
 	head := fs.String("head", "HEAD", "head ref to diff")
+	lang := fs.String("lang", "auto", "language: auto|go|node")
 	fs.Parse(args)
 
-	report, err := prdiff.DiffGoMod(*base, *head)
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	features, err := analyzer.FeaturesFor(*lang, dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "features:", err)
+		return 2
+	}
+	report, err := features.PRDiff.Diff(*base, *head)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "pr diff:", err)
 		return 2

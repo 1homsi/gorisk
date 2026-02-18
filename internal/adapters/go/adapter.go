@@ -8,5 +8,18 @@ type Adapter struct{}
 func (a *Adapter) Name() string { return "go" }
 
 func (a *Adapter) Load(dir string) (*graph.DependencyGraph, error) {
-	return graph.Load(dir)
+	g, err := graph.Load(dir)
+	if err != nil {
+		return nil, err
+	}
+	for _, pkg := range g.Packages {
+		if pkg.Dir == "" || len(pkg.GoFiles) == 0 {
+			continue
+		}
+		caps, err := DetectPackage(pkg.Dir, pkg.GoFiles)
+		if err == nil {
+			pkg.Capabilities = caps
+		}
+	}
+	return g, nil
 }

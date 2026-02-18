@@ -1,4 +1,4 @@
-package capability
+package goadapter
 
 import (
 	"go/ast"
@@ -6,25 +6,27 @@ import (
 	"go/token"
 	"path/filepath"
 	"strings"
+
+	"github.com/1homsi/gorisk/internal/capability"
 )
 
-func DetectFile(fpath string, fset *token.FileSet) (CapabilitySet, error) {
+// DetectFile parses a single Go source file and returns its capability set.
+func DetectFile(fpath string, fset *token.FileSet) (capability.CapabilitySet, error) {
 	if fset == nil {
 		fset = token.NewFileSet()
 	}
 	f, err := parser.ParseFile(fset, fpath, nil, 0)
 	if err != nil {
-		return CapabilitySet{}, err
+		return capability.CapabilitySet{}, err
 	}
 
-	var cs CapabilitySet
+	var cs capability.CapabilitySet
 
 	importAliases := make(map[string]string)
 
 	for _, imp := range f.Imports {
 		path := strings.Trim(imp.Path.Value, `"`)
-		caps := ImportCapabilities(path)
-		for _, c := range caps {
+		for _, c := range GoPatterns.Imports[path] {
 			cs.Add(c)
 		}
 		localName := filepath.Base(path)
@@ -55,8 +57,7 @@ func DetectFile(fpath string, fset *token.FileSet) (CapabilitySet, error) {
 			return true
 		}
 		pkgShort := filepath.Base(pkgPath)
-		caps := CallCapabilities(pkgShort, funcName)
-		for _, c := range caps {
+		for _, c := range GoPatterns.CallSites[pkgShort+"."+funcName] {
 			cs.Add(c)
 		}
 		return true
@@ -65,9 +66,10 @@ func DetectFile(fpath string, fset *token.FileSet) (CapabilitySet, error) {
 	return cs, nil
 }
 
-func DetectPackage(dir string, goFiles []string) (CapabilitySet, error) {
+// DetectPackage runs DetectFile over all Go files in a package directory.
+func DetectPackage(dir string, goFiles []string) (capability.CapabilitySet, error) {
 	fset := token.NewFileSet()
-	var cs CapabilitySet
+	var cs capability.CapabilitySet
 	for _, f := range goFiles {
 		fpath := filepath.Join(dir, f)
 		fileCaps, err := DetectFile(fpath, fset)

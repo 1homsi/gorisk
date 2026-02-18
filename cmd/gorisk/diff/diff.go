@@ -6,13 +6,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/report"
-	"github.com/1homsi/gorisk/internal/upgrade"
 )
 
 func Run(args []string) int {
 	fs := flag.NewFlagSet("diff", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "JSON output")
+	lang := fs.String("lang", "auto", "language: auto|go|node")
 	fs.Parse(args)
 
 	if fs.NArg() < 2 {
@@ -31,7 +32,19 @@ func Run(args []string) int {
 		return 2
 	}
 
-	diffs, err := upgrade.DiffCapabilities(modulePath, oldVer, newVer)
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+
+	features, err := analyzer.FeaturesFor(*lang, dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "features:", err)
+		return 2
+	}
+
+	diffs, err := features.CapDiff.DiffCapabilities(modulePath, oldVer, newVer)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "diff:", err)
 		return 2

@@ -6,13 +6,14 @@ import (
 	"os"
 	"strings"
 
+	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/report"
-	upgradelib "github.com/1homsi/gorisk/internal/upgrade"
 )
 
 func Run(args []string) int {
 	fs := flag.NewFlagSet("upgrade", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "JSON output")
+	lang := fs.String("lang", "auto", "language: auto|go|node")
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
@@ -32,7 +33,12 @@ func Run(args []string) int {
 		return 2
 	}
 
-	r, err := upgradelib.Analyze(dir, modulePath, version)
+	features, err := analyzer.FeaturesFor(*lang, dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "features:", err)
+		return 2
+	}
+	r, err := features.Upgrade.Analyze(dir, modulePath, version)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "upgrade analysis:", err)
 		return 2

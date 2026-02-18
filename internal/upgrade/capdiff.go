@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 
+	goadapter "github.com/1homsi/gorisk/internal/adapters/go"
+	nodeadapter "github.com/1homsi/gorisk/internal/adapters/node"
 	"github.com/1homsi/gorisk/internal/capability"
 )
 
@@ -17,7 +19,26 @@ type CapDiff struct {
 	Escalated bool
 }
 
-func DiffCapabilities(modulePath, oldVersion, newVersion string) ([]CapDiff, error) {
+// CapDiffer compares the capability sets of two versions of a package.
+type CapDiffer interface {
+	DiffCapabilities(modulePath, oldVersion, newVersion string) ([]CapDiff, error)
+}
+
+// GoCapDiffer implements CapDiffer for Go modules.
+type GoCapDiffer struct{}
+
+func (GoCapDiffer) DiffCapabilities(modulePath, oldVersion, newVersion string) ([]CapDiff, error) {
+	return diffGoCapabilities(modulePath, oldVersion, newVersion)
+}
+
+// NodeCapDiffer implements CapDiffer for npm packages.
+type NodeCapDiffer struct{}
+
+func (NodeCapDiffer) DiffCapabilities(pkgName, oldVersion, newVersion string) ([]CapDiff, error) {
+	return diffNodeCapabilities(pkgName, oldVersion, newVersion)
+}
+
+func diffGoCapabilities(modulePath, oldVersion, newVersion string) ([]CapDiff, error) {
 	oldDir, err := os.MkdirTemp("", "gorisk-old-*")
 	if err != nil {
 		return nil, err
@@ -30,10 +51,10 @@ func DiffCapabilities(modulePath, oldVersion, newVersion string) ([]CapDiff, err
 	}
 	defer os.RemoveAll(newDir)
 
-	if err := scaffoldTempModule(oldDir, modulePath, oldVersion); err != nil {
+	if err := goScaffoldTempModule(oldDir, modulePath, oldVersion); err != nil {
 		return nil, fmt.Errorf("scaffold old: %w", err)
 	}
-	if err := scaffoldTempModule(newDir, modulePath, newVersion); err != nil {
+	if err := goScaffoldTempModule(newDir, modulePath, newVersion); err != nil {
 		return nil, fmt.Errorf("scaffold new: %w", err)
 	}
 
@@ -78,7 +99,7 @@ func scanDirCapabilities(dir, modulePath string) (map[string]capability.Capabili
 		if p.Module == nil || p.Module.Path != modulePath {
 			continue
 		}
-		cs, err := capability.DetectPackage(p.Dir, p.GoFiles)
+		cs, err := goadapter.DetectPackage(p.Dir, p.GoFiles)
 		if err != nil {
 			continue
 		}
@@ -130,4 +151,25 @@ func buildDiffs(oldCaps, newCaps map[string]capability.CapabilitySet) []CapDiff 
 		})
 	}
 	return diffs
+}
+
+// diffNodeCapabilities compares capability sets of two npm package versions
+// by downloading both from the registry and scanning them.
+func diffNodeCapabilities(pkgName, oldVersion, newVersion string) ([]CapDiff, error) {
+	oldDir, err := nodeadapter.DownloadPackage(pkgName, oldVersion)
+	if err != nil {
+		return nil, fmt.Errorf("download %s@%s: %w", pkgName, oldVersion, err)
+	}
+	defer os.RemoveAll(oldDir)
+
+	newDir, err := nodeadapter.DownloadPackage(pkgName, newVersion)
+	if err != nil {
+		return nil, fmt.Errorf("download %s@%s: %w", pkgName, newVersion, err)
+	}
+	defer os.RemoveAll(newDir)
+
+	oldCaps := map[string]capability.CapabilitySet{pkgName: nodeadapter.Detect(oldDir)}
+	newCaps := map[string]capability.CapabilitySet{pkgName: nodeadapter.Detect(newDir)}
+
+	return buildDiffs(oldCaps, newCaps), nil
 }
