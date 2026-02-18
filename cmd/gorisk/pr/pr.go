@@ -7,15 +7,8 @@ import (
 	"os"
 	"strings"
 
-	"github.com/1homsi/gorisk/internal/prdiff"
+	"github.com/1homsi/gorisk/internal/analyzer"
 )
-
-func resolveLang(lang string) string {
-	if lang == "auto" || lang == "" {
-		return "go" // default to go for backward compat; auto-detect can be added later
-	}
-	return lang
-}
 
 func Run(args []string) int {
 	fs := flag.NewFlagSet("pr", flag.ExitOnError)
@@ -25,8 +18,17 @@ func Run(args []string) int {
 	lang := fs.String("lang", "auto", "language: auto|go|node")
 	fs.Parse(args)
 
-	l := resolveLang(*lang)
-	report, err := prdiff.Diff(*base, *head, l)
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	features, err := analyzer.FeaturesFor(*lang, dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "features:", err)
+		return 2
+	}
+	report, err := features.PRDiff.Diff(*base, *head)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "pr diff:", err)
 		return 2

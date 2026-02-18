@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/reachability"
 )
 
@@ -26,12 +27,13 @@ func Run(args []string) int {
 		dir = fs.Arg(0)
 	}
 
-	l := *lang
-	if l == "auto" {
-		l = "go"
+	features, err := analyzer.FeaturesFor(*lang, dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "features:", err)
+		return 2
 	}
 
-	reports, err := reachability.Analyze(dir, l)
+	reports, err := features.Reachability.Analyze(dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "reachability analysis:", err)
 		return 2

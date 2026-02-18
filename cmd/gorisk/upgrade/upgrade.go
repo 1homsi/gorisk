@@ -6,8 +6,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/report"
-	upgradelib "github.com/1homsi/gorisk/internal/upgrade"
 )
 
 func Run(args []string) int {
@@ -33,11 +33,12 @@ func Run(args []string) int {
 		return 2
 	}
 
-	l := *lang
-	if l == "auto" {
-		l = "go"
+	features, err := analyzer.FeaturesFor(*lang, dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "features:", err)
+		return 2
 	}
-	r, err := upgradelib.Analyze(dir, modulePath, version, l)
+	r, err := features.Upgrade.Analyze(dir, modulePath, version)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "upgrade analysis:", err)
 		return 2

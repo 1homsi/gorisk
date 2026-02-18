@@ -1,21 +1,23 @@
 package upgrade
 
-import (
-	"fmt"
+import "github.com/1homsi/gorisk/internal/report"
 
-	"github.com/1homsi/gorisk/internal/report"
-)
+// Upgrader compares the current installed version of a package against a
+// candidate version and returns an upgrade risk report.
+type Upgrader interface {
+	Analyze(projectDir, pkgName, newVersion string) (report.UpgradeReport, error)
+}
 
-// Analyze compares the current installed version of a package against
-// newVersion and returns an upgrade risk report.
-// lang selects the implementation: "go" or "node".
-func Analyze(projectDir, pkgName, newVersion, lang string) (report.UpgradeReport, error) {
-	switch lang {
-	case "go":
-		return analyzeGo(projectDir, pkgName, newVersion)
-	case "node":
-		return analyzeNode(projectDir, pkgName, newVersion)
-	default:
-		return report.UpgradeReport{}, fmt.Errorf("upgrade: unsupported language %q (supported: go, node)", lang)
-	}
+// GoUpgrader implements Upgrader for Go modules.
+type GoUpgrader struct{}
+
+func (GoUpgrader) Analyze(projectDir, pkgName, newVersion string) (report.UpgradeReport, error) {
+	return analyzeGo(projectDir, pkgName, newVersion)
+}
+
+// NodeUpgrader implements Upgrader for npm packages.
+type NodeUpgrader struct{}
+
+func (NodeUpgrader) Analyze(projectDir, pkgName, newVersion string) (report.UpgradeReport, error) {
+	return analyzeNode(projectDir, pkgName, newVersion)
 }

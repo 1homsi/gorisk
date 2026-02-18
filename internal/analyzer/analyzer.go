@@ -8,7 +8,49 @@ import (
 	goadapter "github.com/1homsi/gorisk/internal/adapters/go"
 	nodeadapter "github.com/1homsi/gorisk/internal/adapters/node"
 	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/prdiff"
+	"github.com/1homsi/gorisk/internal/reachability"
+	"github.com/1homsi/gorisk/internal/upgrade"
 )
+
+// LangFeatures holds the feature implementations registered for a language.
+type LangFeatures struct {
+	Upgrade      upgrade.Upgrader
+	CapDiff      upgrade.CapDiffer
+	PRDiff       prdiff.Differ
+	Reachability reachability.Analyzer
+}
+
+var registry = map[string]LangFeatures{
+	"go": {
+		Upgrade:      upgrade.GoUpgrader{},
+		CapDiff:      upgrade.GoCapDiffer{},
+		PRDiff:       prdiff.GoDiffer{},
+		Reachability: reachability.GoAnalyzer{},
+	},
+	"node": {
+		Upgrade:      upgrade.NodeUpgrader{},
+		CapDiff:      upgrade.NodeCapDiffer{},
+		PRDiff:       prdiff.NodeDiffer{},
+		Reachability: reachability.NodeAnalyzer{},
+	},
+}
+
+// FeaturesFor returns the feature implementations for the given language.
+// lang may be "auto", "go", or "node".
+func FeaturesFor(lang, dir string) (LangFeatures, error) {
+	if lang == "auto" || lang == "" {
+		lang = detect(dir)
+		if lang == "multi" {
+			lang = "go" // multi-repo: default to go for non-graph features
+		}
+	}
+	f, ok := registry[lang]
+	if !ok {
+		return LangFeatures{}, fmt.Errorf("unknown language %q; choose auto|go|node", lang)
+	}
+	return f, nil
+}
 
 // Analyzer loads a dependency graph for a project directory.
 type Analyzer interface {

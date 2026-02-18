@@ -1,10 +1,6 @@
 package prdiff
 
-import (
-	"fmt"
-
-	"github.com/1homsi/gorisk/internal/capability"
-)
+import "github.com/1homsi/gorisk/internal/capability"
 
 // ModuleDiff describes a single dependency change in a PR.
 type ModuleDiff struct {
@@ -22,15 +18,21 @@ type PRDiffReport struct {
 	Updated []ModuleDiff
 }
 
-// Diff returns the dependency changes between baseRef and headRef.
-// lang selects the implementation: "go" or "node".
-func Diff(baseRef, headRef, lang string) (PRDiffReport, error) {
-	switch lang {
-	case "go":
-		return diffGoMod(baseRef, headRef)
-	case "node":
-		return diffPackageJSON(baseRef, headRef)
-	default:
-		return PRDiffReport{}, fmt.Errorf("prdiff: unsupported language %q (supported: go, node)", lang)
-	}
+// Differ compares dependency changes between two git refs.
+type Differ interface {
+	Diff(baseRef, headRef string) (PRDiffReport, error)
+}
+
+// GoDiffer implements Differ by parsing go.mod changes.
+type GoDiffer struct{}
+
+func (GoDiffer) Diff(baseRef, headRef string) (PRDiffReport, error) {
+	return diffGoMod(baseRef, headRef)
+}
+
+// NodeDiffer implements Differ by parsing package.json / lockfile changes.
+type NodeDiffer struct{}
+
+func (NodeDiffer) Diff(baseRef, headRef string) (PRDiffReport, error) {
+	return diffPackageJSON(baseRef, headRef)
 }
