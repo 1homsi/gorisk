@@ -17,6 +17,7 @@ func Run(args []string) int {
 	jsonOut := fs.Bool("json", false, "JSON output")
 	minRisk := fs.String("min-risk", "low", "minimum risk level to show: low|medium|high")
 	lang := fs.String("lang", "auto", "language analyzer: auto|go|node")
+	entry := fs.String("entry", "", "restrict analysis to this entrypoint file (e.g. cmd/server/main.go)")
 	fs.Parse(args)
 
 	dir, err := os.Getwd()
@@ -34,7 +35,12 @@ func Run(args []string) int {
 		return 2
 	}
 
-	reports, err := features.Reachability.Analyze(dir)
+	var reports []reachability.ReachabilityReport
+	if *entry != "" {
+		reports, err = features.Reachability.AnalyzeFrom(dir, *entry)
+	} else {
+		reports, err = features.Reachability.Analyze(dir)
+	}
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "reachability analysis:", err)
 		return 2

@@ -2,6 +2,7 @@ package reachability
 
 import (
 	"go/token"
+	"path/filepath"
 
 	goadapter "github.com/1homsi/gorisk/internal/adapters/go"
 	"github.com/1homsi/gorisk/internal/capability"
@@ -12,7 +13,7 @@ import (
 	"golang.org/x/tools/go/ssa/ssautil"
 )
 
-func analyzeGo(dir string) ([]ReachabilityReport, error) {
+func analyzeGo(dir, entryFile string) ([]ReachabilityReport, error) {
 	cfg := &packages.Config{
 		Dir: dir,
 		Mode: packages.NeedName |
@@ -38,6 +39,32 @@ func analyzeGo(dir string) ([]ReachabilityReport, error) {
 	for _, p := range ssaPkgs {
 		if p != nil && p.Pkg.Name() == "main" {
 			mains = append(mains, p)
+		}
+	}
+
+	// If an entry file is specified, filter mains to only the package containing it.
+	if entryFile != "" {
+		absEntry := entryFile
+		if !filepath.IsAbs(entryFile) {
+			absEntry = filepath.Join(dir, entryFile)
+		}
+		absEntry = filepath.Clean(absEntry)
+
+		var filteredMains []*ssa.Package
+		for i, lp := range pkgs {
+			matched := false
+			for _, f := range lp.GoFiles {
+				if filepath.Clean(f) == absEntry {
+					matched = true
+					break
+				}
+			}
+			if matched && i < len(ssaPkgs) && ssaPkgs[i] != nil {
+				filteredMains = append(filteredMains, ssaPkgs[i])
+			}
+		}
+		if len(filteredMains) > 0 {
+			mains = filteredMains
 		}
 	}
 

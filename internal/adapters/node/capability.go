@@ -57,33 +57,68 @@ func scanFile(path string, caps *capability.CapabilitySet) {
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 1024*1024), 1024*1024)
 
+	lineNo := 0
 	for scanner.Scan() {
 		line := scanner.Text()
+		lineNo++
 
 		for _, m := range reRequire.FindAllStringSubmatch(line, -1) {
-			applyImportCaps(m[1], caps)
+			importPath := m[1]
+			for _, c := range nodePatterns.Imports[importPath] {
+				caps.AddWithEvidence(c, capability.CapabilityEvidence{
+					File:       path,
+					Line:       lineNo,
+					Context:    m[0],
+					Via:        "import",
+					Confidence: 0.90,
+				})
+			}
 		}
 		for _, m := range reImportFrom.FindAllStringSubmatch(line, -1) {
-			applyImportCaps(m[1], caps)
+			importPath := m[1]
+			for _, c := range nodePatterns.Imports[importPath] {
+				caps.AddWithEvidence(c, capability.CapabilityEvidence{
+					File:       path,
+					Line:       lineNo,
+					Context:    m[0],
+					Via:        "import",
+					Confidence: 0.90,
+				})
+			}
 		}
 		for _, m := range reImportDyn.FindAllStringSubmatch(line, -1) {
-			applyImportCaps(m[1], caps)
-			caps.Add(capability.CapPlugin)
+			importPath := m[1]
+			for _, c := range nodePatterns.Imports[importPath] {
+				caps.AddWithEvidence(c, capability.CapabilityEvidence{
+					File:       path,
+					Line:       lineNo,
+					Context:    m[0],
+					Via:        "import",
+					Confidence: 0.90,
+				})
+			}
+			caps.AddWithEvidence(capability.CapPlugin, capability.CapabilityEvidence{
+				File:       path,
+				Line:       lineNo,
+				Context:    m[0],
+				Via:        "import",
+				Confidence: 0.90,
+			})
 		}
 
 		for pattern, patCaps := range nodePatterns.CallSites {
 			if strings.Contains(line, pattern) {
 				for _, c := range patCaps {
-					caps.Add(c)
+					caps.AddWithEvidence(c, capability.CapabilityEvidence{
+						File:       path,
+						Line:       lineNo,
+						Context:    pattern,
+						Via:        "callSite",
+						Confidence: 0.60,
+					})
 				}
 			}
 		}
-	}
-}
-
-func applyImportCaps(importPath string, caps *capability.CapabilitySet) {
-	for _, c := range nodePatterns.Imports[importPath] {
-		caps.Add(c)
 	}
 }
 
@@ -106,8 +141,18 @@ func checkInstallScripts(dir string, caps *capability.CapabilitySet) {
 		lower := strings.ToLower(script)
 		for _, kw := range []string{"curl", "wget", "bash", "sh ", "/bin/sh"} {
 			if strings.Contains(lower, kw) {
-				caps.Add(capability.CapExec)
-				caps.Add(capability.CapNetwork)
+				snippet := script
+				if len(snippet) > 80 {
+					snippet = snippet[:77] + "..."
+				}
+				ev := capability.CapabilityEvidence{
+					File:       "package.json",
+					Context:    scriptName + ": " + snippet,
+					Via:        "installScript",
+					Confidence: 0.85,
+				}
+				caps.AddWithEvidence(capability.CapExec, ev)
+				caps.AddWithEvidence(capability.CapNetwork, ev)
 				break
 			}
 		}
