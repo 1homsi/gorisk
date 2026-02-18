@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/health"
 	"github.com/1homsi/gorisk/internal/report"
 )
@@ -34,6 +34,7 @@ func Run(args []string) int {
 	sarifOut := fs.Bool("sarif", false, "SARIF 2.1.0 output")
 	failOn := fs.String("fail-on", "high", "fail on risk level: low|medium|high")
 	policyFile := fs.String("policy", "", "policy JSON file")
+	lang := fs.String("lang", "auto", "language analyzer: auto|go|node")
 	fs.Parse(args)
 
 	dir, err := os.Getwd()
@@ -77,7 +78,12 @@ func Run(args []string) int {
 		deniedCaps[strings.ToLower(c)] = true
 	}
 
-	g, err := graph.Load(dir)
+	a, err := analyzer.ForLang(*lang, dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
+	g, err := a.Load(dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "load graph:", err)
 		return 2

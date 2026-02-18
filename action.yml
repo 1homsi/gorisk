@@ -18,6 +18,10 @@ inputs:
     description: 'Upload SARIF results to the GitHub Security tab'
     required: false
     default: 'true'
+  lang:
+    description: 'Language analyzer to use (auto|go|node)'
+    required: false
+    default: 'auto'
 
 outputs:
   passed:
@@ -44,7 +48,7 @@ runs:
           SCAN_ARGS="$SCAN_ARGS --policy ${{ inputs.policy-file }}"
         fi
 
-        gorisk scan --sarif $SCAN_ARGS > "$SARIF_FILE"
+        gorisk scan --sarif --lang ${{ inputs.lang }} $SCAN_ARGS > "$SARIF_FILE"
         EXIT=$?
 
         echo "sarif-file=$SARIF_FILE" >> "$GITHUB_OUTPUT"
