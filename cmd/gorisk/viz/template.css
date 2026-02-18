@@ -1,0 +1,77 @@
+*{box-sizing:border-box;margin:0;padding:0}
+body{background:#fff;color:#111;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;overflow:hidden;user-select:none}
+canvas{display:block;cursor:grab}
+canvas.dragging{cursor:grabbing}
+
+/* ── Header ── */
+#hdr{position:fixed;top:0;left:0;right:0;background:#fff;border-bottom:1px solid #e5e5e5;padding:0 16px;height:52px;display:flex;align-items:center;gap:0;z-index:50;overflow:hidden}
+#hdr-brand{display:flex;align-items:center;gap:9px;text-decoration:none;color:inherit;flex-shrink:0}
+#hdr-brand svg{width:18px;height:18px;fill:#111;flex-shrink:0}
+#hdr-brand strong{font-size:14px;font-weight:600;color:#111}
+.hdiv{width:1px;height:22px;background:#e5e5e5;margin:0 14px;flex-shrink:0}
+#stats{display:flex;align-items:center;gap:6px;flex-shrink:0}
+.chip{
+  display:inline-flex;align-items:center;gap:4px;
+  padding:3px 9px;border-radius:20px;font-size:11px;font-weight:500;border:1px solid;
+  cursor:pointer;transition:opacity .15s;
+}
+.chip.off{opacity:.35}
+.chip-dot{width:6px;height:6px;border-radius:50%;background:currentColor}
+.chip-total{color:#666;border-color:#e5e5e5;background:#f5f5f5;cursor:default}
+.chip-high{color:#d73a30;border-color:#fcc;background:#fff5f5}
+.chip-med{color:#b36b00;border-color:#fde8a0;background:#fffbee}
+.chip-low{color:#238636;border-color:#b7e2bc;background:#f0fff3}
+#hdr-right{margin-left:auto;display:flex;align-items:center;gap:8px;flex-shrink:0}
+#edge-toggle{
+  padding:4px 10px;border-radius:6px;font-size:11px;font-weight:500;
+  border:1px solid #e5e5e5;background:#f5f5f5;color:#555;cursor:pointer;
+  display:flex;align-items:center;gap:5px;white-space:nowrap;
+}
+#edge-toggle.on{background:#111;color:#fff;border-color:#111}
+#search{background:#f5f5f5;border:1px solid #e5e5e5;border-radius:6px;padding:4px 10px;color:#111;font-size:12px;width:180px;outline:none}
+#search:focus{border-color:#bbb;background:#fff}
+#search::placeholder{color:#bbb}
+
+/* ── Tooltip ── */
+#tip{position:fixed;display:none;background:#fff;border:1px solid #e5e5e5;border-radius:8px;padding:14px 16px;pointer-events:none;font-size:12px;max-width:340px;z-index:200;box-shadow:0 4px 20px rgba(0,0,0,.12)}
+#tip-name{font-size:13px;font-weight:600;color:#0969da;margin-bottom:3px;word-break:break-all;line-height:1.4}
+#tip-mod{font-size:11px;color:#aaa;margin-bottom:10px}
+.tip-grid{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin-bottom:10px}
+.tip-k{color:#aaa;font-size:11px;white-space:nowrap}
+.tip-v{color:#333;font-size:12px}
+.tip-v b{color:#111}
+#tip-caps{display:flex;flex-wrap:wrap;gap:4px}
+.cap-tag{padding:2px 7px;border-radius:4px;font-size:10px;font-weight:500;border:1px solid}
+.cap-tag.exec{color:#cf222e;border-color:#ffb8b8;background:#fff5f5}
+.cap-tag.network{color:#0550ae;border-color:#b6d4fe;background:#f0f6ff}
+.cap-tag.unsafe{color:#bc4c00;border-color:#fbd38d;background:#fffaf0}
+.cap-tag.plugin{color:#6e40c9;border-color:#d8b4fe;background:#faf5ff}
+.cap-tag.fs{color:#9a6700;border-color:#fde68a;background:#fffef0}
+.cap-tag.env{color:#666;border-color:#e5e5e5;background:#f5f5f5}
+.cap-tag.crypto{color:#1a7f37;border-color:#b7e2bc;background:#f0fff3}
+.cap-tag.reflect{color:#116329;border-color:#9be9a8;background:#dafbe1}
+
+/* ── Game controller ── */
+#ctrl{
+  position:fixed;bottom:24px;right:24px;
+  display:grid;
+  grid-template-columns:40px 40px 40px 14px 40px;
+  grid-template-rows:40px 40px 40px;
+  gap:4px;z-index:60;
+  align-items:center;justify-items:center;
+}
+.cbtn{width:40px;height:40px;background:#fff;border:1px solid #ddd;border-radius:10px;display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:16px;color:#444;box-shadow:0 2px 6px rgba(0,0,0,.07);transition:background .1s,transform .08s;-webkit-tap-highlight-color:transparent;touch-action:none}
+.cbtn:hover{background:#f5f5f5;border-color:#bbb}
+.cbtn:active,.cbtn.pressed{background:#e8e8e8;transform:scale(.93)}
+.cbtn-center{background:#f0f0f0;color:#888;font-size:13px}
+.cbtn-zoom{font-size:20px;font-weight:300;color:#333}
+
+/* ── Legend ── */
+#legend{position:fixed;bottom:24px;left:20px;background:#fff;border:1px solid #e5e5e5;border-radius:8px;padding:12px 16px;font-size:11px;box-shadow:0 2px 8px rgba(0,0,0,.07)}
+#legend h4{color:#aaa;font-weight:500;text-transform:uppercase;letter-spacing:.08em;font-size:9px;margin-bottom:8px}
+.leg-row{display:flex;align-items:center;gap:7px;margin-bottom:5px;color:#888}
+.leg-row:last-child{margin-bottom:0}
+.leg-dot{width:9px;height:9px;border-radius:50%;flex-shrink:0}
+
+/* ── Notice banner ── */
+#notice{position:fixed;top:60px;left:50%;transform:translateX(-50%);background:#fffbee;border:1px solid #fde8a0;border-radius:6px;padding:7px 14px;font-size:11px;color:#b36b00;z-index:60;display:none;white-space:nowrap}
