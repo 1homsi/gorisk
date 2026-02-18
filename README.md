@@ -195,6 +195,7 @@ Compare capabilities between two versions of a dependency. Detects supply chain 
 
 ```bash
 gorisk diff golang.org/x/net@v0.20.0 golang.org/x/net@v0.25.0
+gorisk diff --lang node lodash@4.17.20 lodash@4.17.21
 ```
 
 Output flags capability additions/removals per package. Exit 1 if escalation detected (exec/network/unsafe/plugin added).
@@ -205,6 +206,7 @@ Check for breaking API changes before upgrading a dependency.
 
 ```bash
 gorisk upgrade golang.org/x/tools@v0.29.0
+gorisk upgrade --lang node express@5.0.0
 ```
 
 ### `gorisk impact`
@@ -218,10 +220,11 @@ gorisk impact --json golang.org/x/tools
 
 ### `gorisk reachability` ⚡ unique
 
-Uses callgraph analysis (RTA) to determine whether risky capabilities are **actually reachable** from your `main` functions — not just imported. Eliminates false positives.
+Determines whether risky capabilities are **actually reachable** — not just imported. For Go, uses callgraph analysis (RTA) from `main`. For Node.js, traces `require`/`import` paths from project source files.
 
 ```bash
 gorisk reachability
+gorisk reachability --lang node
 gorisk reachability --min-risk high
 gorisk reachability --json
 ```
@@ -232,6 +235,7 @@ Detects dependency changes between two git refs and reports new capabilities, ca
 
 ```bash
 gorisk pr                              # diffs origin/main...HEAD
+gorisk pr --lang node
 gorisk pr --base origin/main --head HEAD
 gorisk pr --json
 ```
@@ -306,7 +310,11 @@ make test
 
 ## Contributing
 
-Adding a new language requires implementing one interface:
+Adding a new language requires two steps:
+
+### 1. Graph loader — `internal/adapters/<lang>/adapter.go`
+
+Implement the `Analyzer` interface to build a dependency graph:
 
 ```go
 type Analyzer interface {
@@ -315,7 +323,32 @@ type Analyzer interface {
 }
 ```
 
-1. Create `internal/adapters/<lang>/adapter.go` implementing `Analyzer`
-2. Register it in `internal/analyzer/analyzer.go` → `ForLang()` switch
-3. Add detection logic to `detect()` (which file signals this language?)
-4. Open a PR — the capability taxonomy and all output formats come for free
+Register it in `internal/analyzer/analyzer.go` → `ForLang()` switch and add a detection signal to `detect()`.
+
+### 2. Feature implementations
+
+Each feature package defines an interface + per-language structs. Implement them for the new language:
+
+| Package | Interface | Example impl |
+|---------|-----------|--------------|
+| `internal/reachability` | `Analyzer` | `GoAnalyzer`, `NodeAnalyzer` |
+| `internal/upgrade` | `Upgrader` | `GoUpgrader`, `NodeUpgrader` |
+| `internal/upgrade` | `CapDiffer` | `GoCapDiffer`, `NodeCapDiffer` |
+| `internal/prdiff` | `Differ` | `GoDiffer`, `NodeDiffer` |
+
+Then add a single entry to the registry in `internal/analyzer/analyzer.go`:
+
+```go
+var registry = map[string]LangFeatures{
+    "go":   { ... },
+    "node": { ... },
+    "rust": {  // your new entry
+        Upgrade:      upgrade.RustUpgrader{},
+        CapDiff:      upgrade.RustCapDiffer{},
+        PRDiff:       prdiff.RustDiffer{},
+        Reachability: reachability.RustAnalyzer{},
+    },
+}
+```
+
+The capability taxonomy, all output formats, and CLI flags come for free.
