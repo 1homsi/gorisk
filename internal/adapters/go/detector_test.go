@@ -134,12 +134,12 @@ func run() { exec.Command("ls") }
 
 	foundCallSite := false
 	for _, ev := range evs {
-		if ev.Via == "callSite" && ev.Confidence == 0.60 {
+		if ev.Via == "callSite" && ev.Confidence == 0.75 {
 			foundCallSite = true
 		}
 	}
 	if !foundCallSite {
-		t.Errorf("expected callSite evidence with confidence=0.60, got: %+v", evs)
+		t.Errorf("expected callSite evidence with confidence=0.75, got: %+v", evs)
 	}
 }
 

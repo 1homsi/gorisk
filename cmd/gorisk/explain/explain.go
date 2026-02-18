@@ -11,6 +11,8 @@ import (
 
 	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/capability"
+	"github.com/1homsi/gorisk/internal/report"
+	"github.com/1homsi/gorisk/internal/taint"
 )
 
 type evidenceEntry struct {
@@ -73,13 +75,16 @@ func Run(args []string) int {
 		return entries[i].Package < entries[j].Package
 	})
 
+	taintFindings := taint.Analyze(g.Packages)
+
 	if *jsonOut {
-		return printJSON(entries)
+		return printJSONWithTaint(entries, taintFindings)
 	}
+	report.WriteTaintFindings(os.Stdout, taintFindings)
 	return printText(entries, dir)
 }
 
-func printJSON(entries []evidenceEntry) int {
+func printJSONWithTaint(entries []evidenceEntry, taintFindings []taint.TaintFinding) int {
 	type jsonEv struct {
 		File       string  `json:"file"`
 		Line       int     `json:"line,omitempty"`
@@ -93,7 +98,12 @@ func printJSON(entries []evidenceEntry) int {
 		Capability string   `json:"capability"`
 		Evidence   []jsonEv `json:"evidence"`
 	}
-	var out []jsonEntry
+	type jsonOutput struct {
+		Capabilities  []jsonEntry          `json:"capabilities"`
+		TaintFindings []taint.TaintFinding `json:"taint_findings,omitempty"`
+	}
+
+	capEntries := make([]jsonEntry, 0, len(entries))
 	for _, e := range entries {
 		jevs := make([]jsonEv, 0, len(e.Evidence))
 		for _, ev := range e.Evidence {
@@ -105,15 +115,20 @@ func printJSON(entries []evidenceEntry) int {
 				Confidence: ev.Confidence,
 			})
 		}
-		out = append(out, jsonEntry{
+		capEntries = append(capEntries, jsonEntry{
 			Package:    e.Package,
 			Module:     e.Module,
 			Capability: e.Capability,
 			Evidence:   jevs,
 		})
 	}
-	if out == nil {
-		out = []jsonEntry{}
+	if capEntries == nil {
+		capEntries = []jsonEntry{}
+	}
+
+	out := jsonOutput{
+		Capabilities:  capEntries,
+		TaintFindings: taintFindings,
 	}
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

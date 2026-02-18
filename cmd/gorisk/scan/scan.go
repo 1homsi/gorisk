@@ -13,6 +13,7 @@ import (
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/health"
 	"github.com/1homsi/gorisk/internal/report"
+	"github.com/1homsi/gorisk/internal/taint"
 )
 
 type PolicyException struct {
@@ -151,10 +152,13 @@ func Run(args []string) int {
 	healthReports, healthTiming := health.ScoreAll(mods)
 	healthDur := time.Since(t2)
 
+	taintFindings := taint.Analyze(g.Packages)
+
 	sr := report.ScanReport{
 		GraphChecksum: g.Checksum(),
 		Capabilities:  capReports,
 		Health:        healthReports,
+		TaintFindings: taintFindings,
 		Passed:        true,
 	}
 

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/1homsi/gorisk/internal/taint"
 )
 
 const (
@@ -229,11 +231,46 @@ func WriteImpact(w io.Writer, r ImpactReport) {
 	}
 }
 
+// WriteTaintFindings prints the taint flow findings section.
+func WriteTaintFindings(w io.Writer, findings []taint.TaintFinding) {
+	if len(findings) == 0 {
+		return
+	}
+	fmt.Fprintf(w, "%s%s=== Taint Flows ===%s\n\n", colorBold, colorCyan, colorReset)
+
+	modW := len("MODULE")
+	for _, f := range findings {
+		if l := len(f.Module); l > modW {
+			modW = l
+		}
+	}
+	const maxMod = 40
+	if modW > maxMod {
+		modW = maxMod
+	}
+
+	for _, f := range findings {
+		color := riskColor(f.Risk)
+		mod := f.Module
+		if len(mod) > modW {
+			mod = mod[:modW-3] + "..."
+		}
+		flow := f.Source + " → " + f.Sink
+		fmt.Fprintf(w, "  %s%-6s%s  %-*s  %-18s  %s\n",
+			color, f.Risk, colorReset,
+			modW, mod,
+			flow,
+			f.Note)
+	}
+	fmt.Fprintln(w)
+}
+
 func WriteScan(w io.Writer, r ScanReport) {
 	WriteCapabilities(w, r.Capabilities)
 	fmt.Fprintln(w)
 	WriteHealth(w, r.Health)
 	fmt.Fprintln(w)
+	WriteTaintFindings(w, r.TaintFindings)
 
 	if r.Passed {
 		fmt.Fprintf(w, "%s%s✓ PASSED%s\n", colorBold, colorGreen, colorReset)
