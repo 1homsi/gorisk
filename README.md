@@ -2,7 +2,8 @@
 
 <img src="assets/gorisk.png" alt="gorisk" width="480"/>
 
-Polyglot dependency risk analyzer. Maps what your dependencies **can do**, not just what CVEs they have.
+**Behavioral supply-chain risk intelligence from code structure.**
+Maps what your dependencies *can do* — network access, exec, filesystem writes, unsafe pointers — not just what CVEs they carry.
 
 ---
 
