@@ -2,21 +2,21 @@
 
 <img src="assets/gorisk.png" alt="gorisk" width="480"/>
 
-Polyglot dependency risk analyzer. Maps what your dependencies **can do**, not just what CVEs they have. Supports Go and Node.js projects out of the box.
+Polyglot dependency risk analyzer. Maps what your dependencies **can do**, not just what CVEs they have.
 
 ## Why gorisk
 
-| Tool | CVEs | Capabilities | Upgrade risk | Blast radius | Node.js | Offline | Free |
-|------|------|-------------|--------------|-------------|---------|---------|------|
+| Tool | CVEs | Capabilities | Upgrade risk | Blast radius | Polyglot | Offline | Free |
+|------|------|-------------|--------------|-------------|----------|---------|------|
 | govulncheck | ✅ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
-| Snyk | ✅ | ❌ | partial | ❌ | ✅ | ❌ | SaaS |
+| Snyk | ✅ | ❌ | partial | ❌ | partial | ❌ | SaaS |
 | goda | ❌ | ❌ | ❌ | partial | ❌ | ✅ | ✅ |
 | GoSurf | ❌ | ❌ | ❌ | ❌ | ❌ | ✅ | ✅ |
 | **gorisk** | via OSV | **✅** | **✅** | **✅** | **✅** | **✅** | **✅** |
 
 Key differentiators:
 
-- **Polyglot** — supports Go (`go.mod`) and Node.js (`package-lock.json`, `yarn.lock`, `pnpm-lock.yaml`) out of the box. Auto-detects the language; monorepos with both run both analyzers and merge results.
+- **Polyglot** — pluggable `Analyzer` interface means any language can be added. Ships with Go and Node.js today; Python, Rust, Java, and Ruby are on the roadmap.
 - **Capability detection** — detect which packages can read files, make network calls, spawn processes, or use `unsafe`/`eval`. Know *what your dependencies can do* before they're in production.
 - **Capability diff** — compare two versions of a dependency and detect capability escalation. If `v1.2.3 → v1.3.0` quietly added `exec` or `network`, gorisk flags it as a supply chain risk signal.
 - **CVE listing** — full list of OSV vulnerability IDs per module, not just a count.
@@ -33,30 +33,112 @@ go install github.com/1homsi/gorisk/cmd/gorisk@latest
 
 ## Language support
 
-gorisk auto-detects the language from the project directory:
-
-| Signal | Analyzer |
-|--------|----------|
-| `go.mod` | Go — static AST analysis via `go list` |
-| `package-lock.json` | Node.js — npm lockfile v1/v2/v3 |
-| `yarn.lock` | Node.js — Yarn classic lockfile |
-| `pnpm-lock.yaml` | Node.js — pnpm lockfile v6/v9 |
-| both `go.mod` + `package.json` | Both analyzers run, graphs merged |
-
-Override with `--lang`:
+gorisk auto-detects the language from the project directory. Use `--lang` to override.
 
 ```bash
-gorisk scan --lang go      # force Go analyzer
-gorisk scan --lang node    # force Node.js analyzer
-gorisk scan --lang auto    # default: auto-detect
+gorisk scan              # auto-detect
+gorisk scan --lang go    # force Go
+gorisk scan --lang node  # force Node.js
 ```
 
-Node.js capability detection scans `.js`, `.ts`, `.tsx`, `.mjs`, `.cjs` files for:
-- `require()` / ESM `import` / dynamic `import()` calls → maps built-in modules to capabilities
-- Call-site patterns: `exec(`, `spawn(`, `eval(`, `readFile`, `writeFile`, `fetch(`, etc.
-- `preinstall`/`postinstall` scripts containing `curl`, `wget`, `bash` → flags `exec` + `network`
+When both `go.mod` and `package.json` are present (monorepo), both analyzers run and their dependency graphs are merged.
+
+### Supported languages
+
+| Language | `--lang` | Status | Detection signal | Lockfile / manifest |
+|----------|----------|--------|-----------------|---------------------|
+| **Go** | `go` | ✅ stable | `go.mod` | `go.mod` + `go list` |
+| **Node.js** | `node` | ✅ stable | `package.json` | `package-lock.json` v1/v2/v3, `yarn.lock`, `pnpm-lock.yaml` |
+| Python | `python` | 🗓 planned | `requirements.txt` / `pyproject.toml` | `poetry.lock`, `Pipfile.lock`, `uv.lock` |
+| Rust | `rust` | 🗓 planned | `Cargo.toml` | `Cargo.lock` |
+| Java | `java` | 🗓 planned | `pom.xml` / `build.gradle` | Maven, Gradle lock files |
+| Ruby | `ruby` | 🗓 planned | `Gemfile` | `Gemfile.lock` |
+
+Want to add a language? The `Analyzer` interface is a single `Load(dir string) (*graph.DependencyGraph, error)` method — see [contributing](#contributing).
+
+### Capability detection per language
+
+#### Go
+Detects capabilities via static AST analysis of `.go` source files:
+
+| Import / call | Capabilities |
+|--------------|--------------|
+| `os`, `io/fs` | `fs:read`, `fs:write` |
+| `net`, `net/http` | `network` |
+| `os/exec` | `exec` |
+| `os.Getenv` | `env` |
+| `unsafe` | `unsafe` |
+| `crypto/*` | `crypto` |
+| `reflect` | `reflect` |
+| `plugin` | `plugin` |
+
+#### Node.js
+Scans `.js`, `.ts`, `.tsx`, `.mjs`, `.cjs` files for `require()`, ESM `import`, and dynamic `import()` patterns:
+
+| Import / call | Capabilities |
+|--------------|--------------|
+| `fs`, `node:fs`, `fs/promises` | `fs:read`, `fs:write` |
+| `http`, `https`, `net`, `tls` | `network` |
+| `child_process`, `worker_threads`, `cluster` | `exec` |
+| `os`, `process` | `env` |
+| `crypto` | `crypto` |
+| `vm` | `unsafe` |
+| `module`, dynamic `import()` | `plugin` |
+| `eval(`, `new Function(` | `unsafe` |
+| `exec(`, `spawn(`, `fork(` | `exec` |
+| `fetch(`, `axios.`, `got(` | `network` |
+| `readFile`, `writeFile`, `unlink(` | `fs:read` / `fs:write` |
+| `process.env` | `env` |
+| `preinstall`/`postinstall` with `curl`/`wget`/`bash` | `exec` + `network` |
+
+### Capability taxonomy
+
+All languages map to the same 9 capabilities:
+
+| Capability | Weight | Meaning |
+|-----------|--------|---------|
+| `fs:read` | 5 | Reads from the filesystem |
+| `fs:write` | 10 | Writes to or deletes files |
+| `network` | 15 | Makes outbound network connections |
+| `exec` | 20 | Spawns subprocesses or shell commands |
+| `env` | 5 | Reads environment variables |
+| `crypto` | 5 | Uses cryptographic primitives |
+| `reflect` | 5 | Uses runtime reflection |
+| `unsafe` | 25 | Bypasses memory/type safety (`unsafe`, `eval`, `vm`) |
+| `plugin` | 20 | Loads or executes external code at runtime |
+
+Risk level is derived from the total weight: **LOW** < 10, **MEDIUM** ≥ 10, **HIGH** ≥ 30.
 
 ## Commands
+
+### `gorisk scan`
+
+Full scan: capabilities + health scoring + CVE listing + CI gate.
+
+```bash
+gorisk scan                              # auto-detect language
+gorisk scan --lang node                  # Node.js project
+gorisk scan --sarif > results.sarif
+gorisk scan --fail-on medium
+gorisk scan --policy policy.json
+```
+
+Output includes three tables:
+
+1. **Capability Report** — package, module, detected capabilities, score, risk level
+2. **Health Report** — module, version, health score, CVE count, status
+3. **Vulnerabilities** — one row per OSV vulnerability ID (only shown when CVEs exist)
+
+```
+=== Vulnerabilities ===
+
+MODULE                    VULNERABILITY ID
+─────────────────────────────────────────────────────
+golang.org/x/net          GO-2023-1571
+golang.org/x/net          GHSA-4374-p667-p6c8
+```
+
+IDs link to `https://osv.dev/vulnerability/<ID>` for full details.
 
 ### `gorisk capabilities`
 
@@ -64,36 +146,9 @@ Detect what each package in your module can do.
 
 ```bash
 gorisk capabilities                      # auto-detect language
-gorisk capabilities --lang node          # Node.js project
+gorisk capabilities --lang node
 gorisk capabilities --min-risk high
 gorisk capabilities --json
-```
-
-### `gorisk diff` ⚡ unique
-
-Compare capabilities between two versions of a dependency. Detects supply chain risk from capability escalation.
-
-```bash
-gorisk diff golang.org/x/net@v0.20.0 golang.org/x/net@v0.25.0
-```
-
-Output flags capability additions/removals per package. Exit 1 if escalation detected (exec/network/unsafe/plugin added).
-
-### `gorisk upgrade`
-
-Check for breaking API changes before upgrading a dependency.
-
-```bash
-gorisk upgrade golang.org/x/tools@v0.29.0
-```
-
-### `gorisk impact`
-
-Simulate removing a module and compute blast radius.
-
-```bash
-gorisk impact golang.org/x/tools
-gorisk impact --json golang.org/x/tools
 ```
 
 ### `gorisk graph`
@@ -134,43 +189,41 @@ gorisk licenses --json
 
 Flags risky licenses: GPL-2.0, GPL-3.0, AGPL-3.0, LGPL-2.1, LGPL-3.0 and unknown licenses.
 
-### `gorisk scan`
+### `gorisk diff` ⚡ unique
 
-Full scan: capabilities + health scoring + CVE listing + CI gate.
+Compare capabilities between two versions of a dependency. Detects supply chain risk from capability escalation.
 
 ```bash
-gorisk scan                              # auto-detect language
-gorisk scan --lang node                  # Node.js project
-gorisk scan --sarif > results.sarif
-gorisk scan --fail-on medium
-gorisk scan --policy policy.json
+gorisk diff golang.org/x/net@v0.20.0 golang.org/x/net@v0.25.0
 ```
 
-Output includes three tables:
+Output flags capability additions/removals per package. Exit 1 if escalation detected (exec/network/unsafe/plugin added).
 
-1. **Capability Report** — package, module, detected capabilities, score, risk level
-2. **Health Report** — module, version, health score, CVE count, status
-3. **Vulnerabilities** — one row per OSV vulnerability ID (only shown when CVEs exist)
+### `gorisk upgrade`
 
-```
-=== Vulnerabilities ===
+Check for breaking API changes before upgrading a dependency.
 
-MODULE                    VULNERABILITY ID
-─────────────────────────────────────────────────────
-golang.org/x/net          GO-2023-1571
-golang.org/x/net          GHSA-4374-p667-p6c8
+```bash
+gorisk upgrade golang.org/x/tools@v0.29.0
 ```
 
-IDs link to `https://osv.dev/vulnerability/<ID>` for full details.
+### `gorisk impact`
+
+Simulate removing a module and compute blast radius.
+
+```bash
+gorisk impact golang.org/x/tools
+gorisk impact --json golang.org/x/tools
+```
 
 ### `gorisk reachability` ⚡ unique
 
 Uses callgraph analysis (RTA) to determine whether risky capabilities are **actually reachable** from your `main` functions — not just imported. Eliminates false positives.
 
 ```bash
-gorisk reachability ./...
-gorisk reachability --min-risk high ./...
-gorisk reachability --json ./...
+gorisk reachability
+gorisk reachability --min-risk high
+gorisk reachability --json
 ```
 
 ### `gorisk pr`
@@ -213,22 +266,6 @@ Exits 1 if a new HIGH risk dependency was introduced.
 | `max_dep_depth` | Maximum allowed dependency depth (0 = unlimited) |
 | `exclude_packages` | Packages to skip entirely |
 
-## Setup
-
-```bash
-git clone https://github.com/1homsi/gorisk
-cd gorisk
-make setup   # installs git hooks (runs golangci-lint on commit)
-make build
-make test
-```
-
-## Environment
-
-| Variable | Purpose |
-|----------|---------|
-| `GORISK_GITHUB_TOKEN` | GitHub token for health scoring (higher rate limits) |
-
 ## GitHub Action
 
 ```yaml
@@ -250,3 +287,35 @@ make test
   with:
     sarif_file: gorisk.sarif
 ```
+
+## Setup
+
+```bash
+git clone https://github.com/1homsi/gorisk
+cd gorisk
+make setup   # installs git hooks (runs golangci-lint on commit)
+make build
+make test
+```
+
+## Environment
+
+| Variable | Purpose |
+|----------|---------|
+| `GORISK_GITHUB_TOKEN` | GitHub token for health scoring (higher rate limits) |
+
+## Contributing
+
+Adding a new language requires implementing one interface:
+
+```go
+type Analyzer interface {
+    Name() string
+    Load(dir string) (*graph.DependencyGraph, error)
+}
+```
+
+1. Create `internal/adapters/<lang>/adapter.go` implementing `Analyzer`
+2. Register it in `internal/analyzer/analyzer.go` → `ForLang()` switch
+3. Add detection logic to `detect()` (which file signals this language?)
+4. Open a PR — the capability taxonomy and all output formats come for free
