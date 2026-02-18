@@ -7,8 +7,6 @@ import (
 	"fmt"
 	"os/exec"
 	"strings"
-
-	"github.com/1homsi/gorisk/internal/capability"
 )
 
 type listModule struct {
@@ -53,13 +51,6 @@ func Load(dir string) (*DependencyGraph, error) {
 			GoFiles:    lp.GoFiles,
 			Imports:    lp.Imports,
 			Deps:       lp.Deps,
-		}
-
-		if lp.Dir != "" && len(lp.GoFiles) > 0 {
-			caps, err := capability.DetectPackage(lp.Dir, lp.GoFiles)
-			if err == nil {
-				pkg.Capabilities = caps
-			}
 		}
 
 		g.Packages[lp.ImportPath] = pkg

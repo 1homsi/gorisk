@@ -14,14 +14,24 @@ func Run(args []string) int {
 	fs := flag.NewFlagSet("reachability", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "JSON output")
 	minRisk := fs.String("min-risk", "low", "minimum risk level to show: low|medium|high")
+	lang := fs.String("lang", "auto", "language analyzer: auto|go|node")
 	fs.Parse(args)
 
-	pattern := "./..."
+	dir, err := os.Getwd()
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return 2
+	}
 	if fs.NArg() > 0 {
-		pattern = fs.Arg(0)
+		dir = fs.Arg(0)
 	}
 
-	reports, err := reachability.Analyze(pattern)
+	l := *lang
+	if l == "auto" {
+		l = "go"
+	}
+
+	reports, err := reachability.Analyze(dir, l)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "reachability analysis:", err)
 		return 2

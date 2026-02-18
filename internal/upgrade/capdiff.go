@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 
+	goadapter "github.com/1homsi/gorisk/internal/adapters/go"
 	"github.com/1homsi/gorisk/internal/capability"
 )
 
@@ -30,10 +31,10 @@ func DiffCapabilities(modulePath, oldVersion, newVersion string) ([]CapDiff, err
 	}
 	defer os.RemoveAll(newDir)
 
-	if err := scaffoldTempModule(oldDir, modulePath, oldVersion); err != nil {
+	if err := goScaffoldTempModule(oldDir, modulePath, oldVersion); err != nil {
 		return nil, fmt.Errorf("scaffold old: %w", err)
 	}
-	if err := scaffoldTempModule(newDir, modulePath, newVersion); err != nil {
+	if err := goScaffoldTempModule(newDir, modulePath, newVersion); err != nil {
 		return nil, fmt.Errorf("scaffold new: %w", err)
 	}
 
@@ -78,7 +79,7 @@ func scanDirCapabilities(dir, modulePath string) (map[string]capability.Capabili
 		if p.Module == nil || p.Module.Path != modulePath {
 			continue
 		}
-		cs, err := capability.DetectPackage(p.Dir, p.GoFiles)
+		cs, err := goadapter.DetectPackage(p.Dir, p.GoFiles)
 		if err != nil {
 			continue
 		}

@@ -1,9 +1,11 @@
-package capability
+package goadapter
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/1homsi/gorisk/internal/capability"
 )
 
 func writeTempGoFile(t *testing.T, src string) string {
@@ -26,7 +28,7 @@ func run() { exec.Command("ls") }
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cs.Has(CapExec) {
+	if !cs.Has(capability.CapExec) {
 		t.Errorf("expected CapExec to be detected, got caps: %v", cs.List())
 	}
 }
@@ -41,7 +43,7 @@ func fetch() { http.Get("http://example.com") }
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cs.Has(CapNetwork) {
+	if !cs.Has(capability.CapNetwork) {
 		t.Errorf("expected CapNetwork to be detected, got caps: %v", cs.List())
 	}
 }
@@ -55,7 +57,7 @@ import _ "unsafe"
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !cs.Has(CapUnsafe) {
+	if !cs.Has(capability.CapUnsafe) {
 		t.Errorf("expected CapUnsafe to be detected, got caps: %v", cs.List())
 	}
 }

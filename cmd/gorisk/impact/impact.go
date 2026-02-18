@@ -6,7 +6,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/analyzer"
 	impactlib "github.com/1homsi/gorisk/internal/impact"
 	"github.com/1homsi/gorisk/internal/report"
 )
@@ -14,6 +14,7 @@ import (
 func Run(args []string) int {
 	fs := flag.NewFlagSet("impact", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "JSON output")
+	lang := fs.String("lang", "auto", "language analyzer: auto|go|node")
 	fs.Parse(args)
 
 	if fs.NArg() < 1 {
@@ -33,7 +34,12 @@ func Run(args []string) int {
 		return 2
 	}
 
-	g, err := graph.Load(dir)
+	a, err := analyzer.ForLang(*lang, dir)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "load analyzer:", err)
+		return 2
+	}
+	g, err := a.Load(dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "load graph:", err)
 		return 2

@@ -94,22 +94,3 @@ func capByName(name string) (Capability, bool) {
 	}
 	return 0, false
 }
-
-// ---------------------------------------------------------------------------
-// Package-level pattern sets — loaded once at startup from embedded YAML.
-// ---------------------------------------------------------------------------
-
-// GoPatterns holds the Go capability patterns loaded from languages/go.yaml.
-var GoPatterns = MustLoadPatterns("go")
-
-// ImportCapabilities returns the capabilities associated with a Go import path.
-// Kept as a public function for callers outside this package (e.g. reachability).
-func ImportCapabilities(importPath string) []Capability {
-	return GoPatterns.Imports[importPath]
-}
-
-// CallCapabilities returns the capabilities for a pkg.Func call pattern.
-// Kept as a public function for callers outside this package.
-func CallCapabilities(pkgName, funcName string) []Capability {
-	return GoPatterns.CallSites[pkgName+"."+funcName]
-}

@@ -10,14 +10,23 @@ import (
 	"github.com/1homsi/gorisk/internal/prdiff"
 )
 
+func resolveLang(lang string) string {
+	if lang == "auto" || lang == "" {
+		return "go" // default to go for backward compat; auto-detect can be added later
+	}
+	return lang
+}
+
 func Run(args []string) int {
 	fs := flag.NewFlagSet("pr", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "JSON output")
 	base := fs.String("base", "origin/main", "base ref to diff against")
 	head := fs.String("head", "HEAD", "head ref to diff")
+	lang := fs.String("lang", "auto", "language: auto|go|node")
 	fs.Parse(args)
 
-	report, err := prdiff.DiffGoMod(*base, *head)
+	l := resolveLang(*lang)
+	report, err := prdiff.Diff(*base, *head, l)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "pr diff:", err)
 		return 2
