@@ -658,6 +658,18 @@ function draw() {
       else if (e.target === selected.id) drawArrow(a, b, edgeCol, 0.65, 1.3);
       else if (showEdges) drawArrow(a, b, edgeCol, 0.03, 0.4);
     });
+  } else if (searchTerm) {
+    // search active: only draw edges that touch a matching node
+    if (showEdges) {
+      EDGES.forEach(e => {
+        const a = byId[e.source], b = byId[e.target]; if (!a || !b) return;
+        if (!vSet.has(e.source) || !vSet.has(e.target)) return;
+        const aM = a.id.toLowerCase().includes(searchTerm) || a.module.toLowerCase().includes(searchTerm);
+        const bM = b.id.toLowerCase().includes(searchTerm) || b.module.toLowerCase().includes(searchTerm);
+        if (aM || bM) drawArrow(a, b, edgeCol, 0.5, edgeWidth(e));
+        else drawArrow(a, b, edgeCol, 0.04, 0.4);
+      });
+    }
   } else if (showEdges) {
     EDGES.forEach(e => {
       const a = byId[e.source], b = byId[e.target]; if (!a || !b) return;
@@ -680,6 +692,7 @@ function draw() {
 
     let isDimmed = false;
     if      (hov && !ih && !isHovNeighbor) isDimmed = true;
+    else if (searchTerm && !isSearch && !ih) isDimmed = true;
     else if (S.mode === 'normal'  && selected && !isSelNode && !isSelNeighbor && !ih) isDimmed = true;
     else if (S.mode === 'blast'   && blastSet && selected && !isSelNode && !isInBlast && !ih) isDimmed = true;
     else if (S.mode === 'path'    && pathNodes.size > 0 && !isOnPath && !ih) isDimmed = true;
