@@ -229,6 +229,32 @@ gorisk reachability --min-risk high
 gorisk reachability --json
 ```
 
+### `gorisk viz` ⚡ unique
+
+Generate an interactive dependency risk graph as a self-contained HTML file. Visualises all packages coloured by risk level with pan, zoom, search, and hover tooltips.
+
+```bash
+gorisk viz > graph.html
+gorisk viz --min-risk medium > graph.html
+gorisk viz --lang node > graph.html
+open graph.html
+```
+
+Output is a **single portable HTML file** — no server required, works offline, sharable by email or PR comment.
+
+**Graph features:**
+- Nodes coloured by risk — 🔴 HIGH ≥ 30 · 🟡 MEDIUM ≥ 10 · 🟢 LOW < 10
+- Node size scales with risk score
+- Hover a node to see its capabilities, score, file count, and import counts, with its edges highlighted
+- **Click a node** to enter focus mode — neighbours animate into a ring around it, everything else dims; click again or click empty space to exit focus
+- Filter by risk level using the chip buttons in the header
+- Toggle edge visibility; edges are shown faintly by default (hidden for very large graphs)
+- Search packages by name or module
+- Scroll to zoom, drag to pan, drag a node to pin it, double-click to unpin
+- Reset button (⊙) zooms to fit all nodes
+
+Large graphs (> 300 packages) use a phyllotaxis initial layout and freeze physics after settling to prevent jitter.
+
 ### `gorisk pr`
 
 Detects dependency changes between two git refs and reports new capabilities, capability escalation, and removed modules. Designed for PR checks.

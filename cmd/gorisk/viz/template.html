@@ -3,82 +3,99 @@
 <head>
 <meta charset="UTF-8">
 <title>gorisk – Dependency Risk Graph</title>
-<style>
-*{box-sizing:border-box;margin:0;padding:0}
-body{background:#0d1117;color:#e6edf3;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",monospace;overflow:hidden}
-canvas{display:block}
-#tip{position:fixed;display:none;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 14px;pointer-events:none;font-size:12px;line-height:1.6;max-width:320px;z-index:100}
-#legend{position:fixed;bottom:16px;left:16px;background:#161b22;border:1px solid #30363d;border-radius:6px;padding:10px 14px;font-size:11px;line-height:1.8}
-#legend h4{margin-bottom:4px;color:#8b949e;font-weight:normal;text-transform:uppercase;letter-spacing:.05em;font-size:10px}
-.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:middle}
-#hdr{position:fixed;top:0;left:0;right:0;background:#161b22;border-bottom:1px solid #30363d;padding:8px 16px;display:flex;align-items:center;gap:16px;font-size:13px;z-index:50}
-#hdr strong{color:#58a6ff}
-#stats{color:#8b949e}
-</style>
+<style>__STYLE__</style>
 </head>
 <body>
-<div id="hdr"><strong>gorisk</strong> <span id="stats"></span></div>
-<canvas id="c"></canvas>
-<div id="tip"></div>
-<div id="legend">
-<h4>Risk Level</h4>
-<div><span class="dot" style="background:#f85149"></span>HIGH</div>
-<div><span class="dot" style="background:#d29922"></span>MEDIUM</div>
-<div><span class="dot" style="background:#3fb950"></span>LOW</div>
+
+<div id="hdr">
+  <a id="hdr-brand" href="https://github.com/1homsi/gorisk" target="_blank" rel="noopener">
+    <svg viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    <strong>gorisk</strong>
+  </a>
+  <div class="hdiv"></div>
+  <div id="stats"></div>
+  <div id="hdr-right">
+    <button id="edge-toggle" title="Toggle edge visibility">⬡ Edges</button>
+    <input id="search" type="text" placeholder="Search packages…">
+    <button id="settings-btn" title="Settings">⚙</button>
+  </div>
 </div>
-<script>
-const DATA=__DATA__;
-const canvas=document.getElementById('c');
-const ctx=canvas.getContext('2d');
-const tip=document.getElementById('tip');
-let W,H;
-function resize(){W=canvas.width=window.innerWidth;H=canvas.height=window.innerHeight}
-window.addEventListener('resize',resize);resize();
-const NODES=DATA.nodes,EDGES=DATA.edges;
-const byId={};
-NODES.forEach(n=>{byId[n.id]=n;n.x=W/2+(Math.random()-.5)*400;n.y=H/2+(Math.random()-.5)*400;n.vx=0;n.vy=0});
-let hi=0,me=0,lo=0;
-NODES.forEach(n=>{if(n.risk==='HIGH')hi++;else if(n.risk==='MEDIUM')me++;else lo++});
-document.getElementById('stats').textContent=NODES.length+' modules \u00b7 '+hi+' HIGH \u00b7 '+me+' MEDIUM \u00b7 '+lo+' LOW';
-function radius(n){return Math.max(6,Math.min(18,6+n.score/6))}
-function color(n){return n.risk==='HIGH'?'#f85149':n.risk==='MEDIUM'?'#d29922':'#3fb950'}
-function tick(){
-for(let i=0;i<NODES.length;i++)for(let j=i+1;j<NODES.length;j++){
-const a=NODES[i],b=NODES[j],dx=b.x-a.x,dy=b.y-a.y,d2=dx*dx+dy*dy||1,d=Math.sqrt(d2),f=4000/d2;
-a.vx-=f*dx/d;a.vy-=f*dy/d;b.vx+=f*dx/d;b.vy+=f*dy/d}
-EDGES.forEach(e=>{const a=byId[e.source],b=byId[e.target];if(!a||!b)return;
-const dx=b.x-a.x,dy=b.y-a.y,d=Math.sqrt(dx*dx+dy*dy)||1,f=(d-120)*.012;
-a.vx+=f*dx/d;a.vy+=f*dy/d;b.vx-=f*dx/d;b.vy-=f*dy/d});
-NODES.forEach(n=>{n.vx+=(W/2-n.x)*.0008;n.vy+=(H/2-n.y)*.0008;n.vx*=.88;n.vy*=.88;n.x+=n.vx;n.y+=n.vy;
-const r=radius(n)+4;if(n.x<r)n.x=r;if(n.x>W-r)n.x=W-r;if(n.y<80+r)n.y=80+r;if(n.y>H-r)n.y=H-r})}
-let hov=null;
-canvas.addEventListener('mousemove',e=>{
-const r2=canvas.getBoundingClientRect(),mx=e.clientX-r2.left,my=e.clientY-r2.top;
-hov=null;
-for(const n of NODES){const r=radius(n),dx=n.x-mx,dy=n.y-my;if(dx*dx+dy*dy<(r+4)*(r+4)){hov=n;break}}
-if(hov){
-const caps=hov.capabilities&&hov.capabilities.length?hov.capabilities.join(', '):'none';
-tip.innerHTML='<div style="color:#58a6ff;font-weight:bold;margin-bottom:4px">'+hov.id+'</div>'
-+'<div>Risk: <span style="color:'+color(hov)+'">'+hov.risk+'</span></div>'
-+'<div>Score: '+hov.score+'</div><div>Depth: '+hov.depth+'</div>'
-+'<div>Capabilities: '+caps+'</div>';
-tip.style.display='block';tip.style.left=(e.clientX+14)+'px';tip.style.top=(e.clientY-10)+'px'
-}else tip.style.display='none'});
-canvas.addEventListener('mouseleave',()=>{tip.style.display='none'});
-function draw(){
-ctx.fillStyle='#0d1117';ctx.fillRect(0,0,W,H);
-EDGES.forEach(e=>{const a=byId[e.source],b=byId[e.target];if(!a||!b)return;
-ctx.beginPath();ctx.moveTo(a.x,a.y);ctx.lineTo(b.x,b.y);ctx.strokeStyle='rgba(139,148,158,.2)';ctx.lineWidth=1;ctx.stroke()});
-NODES.forEach(n=>{const r=radius(n),ih=n===hov;
-if(ih){ctx.beginPath();ctx.arc(n.x,n.y,r+5,0,2*Math.PI);ctx.fillStyle=color(n)+'33';ctx.fill()}
-ctx.beginPath();ctx.arc(n.x,n.y,r,0,2*Math.PI);ctx.fillStyle=color(n);ctx.fill();
-if(ih){ctx.strokeStyle='#fff';ctx.lineWidth=1.5;ctx.stroke()}
-const lbl=n.id.split('/').pop();
-ctx.fillStyle=ih?'#e6edf3':'#8b949e';ctx.font=(ih?'bold ':'')+' 10px monospace';ctx.textAlign='center';
-ctx.fillText(lbl,n.x,n.y+r+13)})}
-let frame=0;
-function loop(){for(let i=0;i<3;i++)tick();frame++;draw();requestAnimationFrame(loop)}
-loop();
-</script>
+
+<div id="mode-bar"></div>
+<div id="notice"></div>
+<canvas id="c"></canvas>
+
+<div id="tip">
+  <div id="tip-name"></div>
+  <div id="tip-mod"></div>
+  <div class="tip-grid" id="tip-grid"></div>
+  <div id="tip-caps"></div>
+</div>
+
+<div id="sp">
+  <div class="sp-head">
+    <span>Settings</span>
+    <button id="sp-close">×</button>
+  </div>
+  <div class="sp-section">
+    <div class="sp-label">Appearance</div>
+    <label class="sp-row"><input type="checkbox" id="s-dark"> Dark mode</label>
+    <label class="sp-row"><input type="checkbox" id="s-hulls"> Module cluster hulls</label>
+  </div>
+  <div class="sp-section">
+    <div class="sp-label">Graph</div>
+    <label class="sp-row"><input type="checkbox" id="s-entry"> Entry points only</label>
+    <label class="sp-row"><input type="checkbox" id="s-connected"> Connected only</label>
+    <label class="sp-row"><input type="checkbox" id="s-edgewt"> Edge weight by imports</label>
+    <label class="sp-row"><input type="checkbox" id="s-copy"> Copy path on click</label>
+  </div>
+  <div class="sp-section">
+    <div class="sp-label">Mode</div>
+    <div class="mode-group">
+      <button class="mode-btn active" data-mode="normal">Normal</button>
+      <button class="mode-btn" data-mode="blast">Blast radius</button>
+      <button class="mode-btn" data-mode="path">Path finder</button>
+    </div>
+  </div>
+  <div class="sp-section">
+    <div class="sp-label">Capability filter</div>
+    <div id="sp-caps"></div>
+  </div>
+</div>
+
+<div id="ctrl">
+  <div></div>
+  <button class="cbtn" id="btn-up">↑</button>
+  <div></div>
+  <div></div>
+  <button class="cbtn cbtn-zoom" id="btn-zi">+</button>
+
+  <button class="cbtn" id="btn-left">←</button>
+  <button class="cbtn cbtn-center" id="btn-reset">⊙</button>
+  <button class="cbtn" id="btn-right">→</button>
+  <div></div>
+  <button class="cbtn cbtn-zoom" id="btn-zo">−</button>
+
+  <div></div>
+  <button class="cbtn" id="btn-down">↓</button>
+  <div></div><div></div><div></div>
+</div>
+
+<div id="legend">
+  <h4>Risk Level</h4>
+  <div class="leg-row"><span class="leg-dot" style="background:#e5534b"></span>HIGH &nbsp;≥ 30</div>
+  <div class="leg-row"><span class="leg-dot" style="background:#d4a72c"></span>MEDIUM &nbsp;≥ 10</div>
+  <div class="leg-row"><span class="leg-dot" style="background:#2da44e"></span>LOW &nbsp;< 10</div>
+  <div style="height:6px"></div>
+  <h4>Arrows</h4>
+  <div class="leg-row" style="font-size:10px">A → B &nbsp;= A imports B</div>
+  <div style="height:4px"></div>
+  <h4>Controls</h4>
+  <div class="leg-row" style="font-size:10px">Scroll → zoom</div>
+  <div class="leg-row" style="font-size:10px">Drag node → pin it</div>
+  <div class="leg-row" style="font-size:10px">Dbl-click → unpin</div>
+</div>
+
+<script>__SCRIPT__</script>
 </body>
 </html>

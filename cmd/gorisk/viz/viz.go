@@ -9,19 +9,29 @@ import (
 	"strings"
 
 	"github.com/1homsi/gorisk/internal/analyzer"
-	"github.com/1homsi/gorisk/internal/graph"
-	"github.com/1homsi/gorisk/internal/transitive"
+	"github.com/1homsi/gorisk/internal/capability"
 )
 
 //go:embed template.html
 var htmlTemplate string
 
+//go:embed template.css
+var cssTemplate string
+
+//go:embed template.js
+var jsTemplate string
+
 type nodeData struct {
 	ID           string   `json:"id"`
+	Label        string   `json:"label"`
+	Module       string   `json:"module"`
 	Risk         string   `json:"risk"`
 	Score        int      `json:"score"`
-	Depth        int      `json:"depth"`
 	Capabilities []string `json:"capabilities,omitempty"`
+	Files        int      `json:"files"`
+	UsedBy       int      `json:"usedBy"`
+	Uses         int      `json:"uses"`
+	IsMain       bool     `json:"main"`
 }
 
 type edgeData struct {
@@ -32,6 +42,7 @@ type edgeData struct {
 type graphData struct {
 	Nodes []nodeData `json:"nodes"`
 	Edges []edgeData `json:"edges"`
+	Main  string     `json:"main"`
 }
 
 func Run(args []string) int {
@@ -57,46 +68,63 @@ func Run(args []string) int {
 		return 2
 	}
 
-	risks := transitive.ComputeTransitiveRisk(g)
-
-	capsByModule := make(map[string][]string)
-	for _, pkg := range g.Packages {
-		if pkg.Module == nil || pkg.Module.Main {
-			continue
-		}
-		for _, c := range pkg.Capabilities.List() {
-			if !hasString(capsByModule[pkg.Module.Path], c) {
-				capsByModule[pkg.Module.Path] = append(capsByModule[pkg.Module.Path], c)
-			}
-		}
-	}
-
 	minLevel := riskValue(*minRisk)
+
+	// build package-level nodes — skip stdlib (no module) and low-risk if filtered
 	included := make(map[string]bool)
 	var nodes []nodeData
-	for _, r := range risks {
-		if riskValue(r.RiskLevel) < minLevel {
+	for pkgPath, pkg := range g.Packages {
+		if pkg.Module == nil {
+			continue // stdlib
+		}
+		caps := pkg.Capabilities
+		score := caps.Score
+		risk := riskLevel(caps)
+		if riskValue(risk) < minLevel {
 			continue
 		}
-		included[r.Module] = true
+		included[pkgPath] = true
 		nodes = append(nodes, nodeData{
-			ID:           r.Module,
-			Risk:         r.RiskLevel,
-			Score:        r.EffectiveScore,
-			Depth:        r.Depth,
-			Capabilities: capsByModule[r.Module],
+			ID:           pkgPath,
+			Label:        shortLabel(pkgPath),
+			Module:       pkg.Module.Path,
+			Risk:         risk,
+			Score:        score,
+			Capabilities: caps.List(),
+			Files:        len(pkg.GoFiles),
+			IsMain:       pkg.Module.Main,
 		})
 	}
 
-	modDeps := buildModuleDeps(g)
-	edgeSeen := make(map[string]bool)
-	var edges []edgeData
-	for src, targets := range modDeps {
+	// compute UsedBy / Uses counts from edges
+	usedBy := make(map[string]int)
+	uses := make(map[string]int)
+	for src, targets := range g.Edges {
 		if !included[src] {
 			continue
 		}
 		for _, tgt := range targets {
 			if !included[tgt] {
+				continue
+			}
+			usedBy[tgt]++
+			uses[src]++
+		}
+	}
+	for i := range nodes {
+		nodes[i].UsedBy = usedBy[nodes[i].ID]
+		nodes[i].Uses = uses[nodes[i].ID]
+	}
+
+	// package-level edges — only between included packages, deduplicated
+	edgeSeen := make(map[string]bool)
+	var edges []edgeData
+	for src, targets := range g.Edges {
+		if !included[src] {
+			continue
+		}
+		for _, tgt := range targets {
+			if !included[tgt] || tgt == src {
 				continue
 			}
 			key := src + "→" + tgt
@@ -114,41 +142,41 @@ func Run(args []string) int {
 		edges = []edgeData{}
 	}
 
-	dataJSON, err := json.Marshal(graphData{Nodes: nodes, Edges: edges})
+	mainPath := ""
+	if g.Main != nil {
+		mainPath = g.Main.Path
+	}
+
+	dataJSON, err := json.Marshal(graphData{Nodes: nodes, Edges: edges, Main: mainPath})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "marshal:", err)
 		return 2
 	}
 
-	fmt.Print(strings.Replace(htmlTemplate, "__DATA__", string(dataJSON), 1))
+	out := strings.Replace(htmlTemplate, "__STYLE__", cssTemplate, 1)
+	out = strings.Replace(out, "__SCRIPT__", jsTemplate, 1)
+	out = strings.Replace(out, "__DATA__", string(dataJSON), 1)
+	fmt.Print(out)
 	return 0
 }
 
-func buildModuleDeps(g *graph.DependencyGraph) map[string][]string {
-	modDeps := make(map[string][]string)
-	seen := make(map[string]map[string]bool)
-	for pkgPath, imports := range g.Edges {
-		pkg := g.Packages[pkgPath]
-		if pkg == nil || pkg.Module == nil {
-			continue
-		}
-		fromMod := pkg.Module.Path
-		if seen[fromMod] == nil {
-			seen[fromMod] = make(map[string]bool)
-		}
-		for _, imp := range imports {
-			impPkg := g.Packages[imp]
-			if impPkg == nil || impPkg.Module == nil {
-				continue
-			}
-			toMod := impPkg.Module.Path
-			if toMod != fromMod && !seen[fromMod][toMod] {
-				seen[fromMod][toMod] = true
-				modDeps[fromMod] = append(modDeps[fromMod], toMod)
-			}
-		}
+func riskLevel(caps capability.CapabilitySet) string {
+	switch {
+	case caps.Score >= 30:
+		return "HIGH"
+	case caps.Score >= 10:
+		return "MEDIUM"
+	default:
+		return "LOW"
 	}
-	return modDeps
+}
+
+func shortLabel(pkgPath string) string {
+	parts := strings.Split(pkgPath, "/")
+	if len(parts) <= 2 {
+		return pkgPath
+	}
+	return strings.Join(parts[len(parts)-2:], "/")
 }
 
 func riskValue(level string) int {
@@ -160,13 +188,4 @@ func riskValue(level string) int {
 	default:
 		return 1
 	}
-}
-
-func hasString(ss []string, s string) bool {
-	for _, x := range ss {
-		if x == s {
-			return true
-		}
-	}
-	return false
 }
