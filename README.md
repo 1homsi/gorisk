@@ -48,7 +48,7 @@ When both `go.mod` and `package.json` are present (monorepo), both analyzers run
 | Language | `--lang` | Status | Detection signal | Lockfile / manifest |
 |----------|----------|--------|-----------------|---------------------|
 | **Go** | `go` | ✅ stable | `go.mod` | `go.mod` + `go list` |
-| **Node.js** | `node` | ✅ stable | `package.json` | `package-lock.json` v1/v2/v3, `yarn.lock`, `pnpm-lock.yaml` |
+| **Node.js** | `node` | ✅ stable | `package.json` | `package-lock.json` v1/v2/v3, `yarn.lock`, `pnpm-lock.yaml`; npm/yarn/pnpm workspaces (monorepos) |
 | Python | `python` | 🗓 planned | `requirements.txt` / `pyproject.toml` | `poetry.lock`, `Pipfile.lock`, `uv.lock` |
 | Rust | `rust` | 🗓 planned | `Cargo.toml` | `Cargo.lock` |
 | Java | `java` | 🗓 planned | `pom.xml` / `build.gradle` | Maven, Gradle lock files |
@@ -247,6 +247,11 @@ Output is a **single portable HTML file** — no server required, works offline,
 - Node size scales with risk score
 - Hover a node to see its capabilities, score, file count, and import counts, with its edges highlighted
 - **Click a node** to enter focus mode — neighbours animate into a ring around it, everything else dims; click again or click empty space to exit focus
+- **Blast radius mode** — click any node to highlight everything that depends on it (reverse reachability BFS)
+- **Path finder mode** — click a source then a target to highlight the shortest dependency path between them
+- **Module cluster hulls** — convex hulls group packages by module for visual organisation
+- **Capability filter** — chip buttons to show only packages with specific capabilities (exec, network, fs:write, …)
+- **Dark mode** — toggle in the settings panel (⚙)
 - Filter by risk level using the chip buttons in the header
 - Toggle edge visibility; edges are shown faintly by default (hidden for very large graphs)
 - Search packages by name or module
@@ -267,6 +272,22 @@ gorisk pr --json
 ```
 
 Exits 1 if a new HIGH risk dependency was introduced.
+
+### `gorisk history`
+
+Track dependency risk over time by recording snapshots and diffing them.
+
+```bash
+gorisk history record              # snapshot current risk state
+gorisk history show                # list all snapshots (index, timestamp, commit, counts)
+gorisk history diff                # diff the last two snapshots
+gorisk history diff N              # diff snapshot N vs the latest
+gorisk history diff N M            # diff snapshot N vs snapshot M
+gorisk history diff --json         # JSON output
+gorisk history record --lang node
+```
+
+Snapshots are stored in `.gorisk-history.json` in the project root (add to `.gitignore`). Up to 100 snapshots are kept. Each diff shows modules that were **added**, **removed**, **escalated** (risk went up), or **improved** (risk went down).
 
 ### Policy file
 
@@ -295,6 +316,8 @@ Exits 1 if a new HIGH risk dependency was introduced.
 | `allow_exceptions` | Per-package exemptions for denied caps |
 | `max_dep_depth` | Maximum allowed dependency depth (0 = unlimited) |
 | `exclude_packages` | Packages to skip entirely |
+
+Unknown fields are rejected at parse time. `fail_on` must be one of `low`, `medium`, or `high`.
 
 ## GitHub Action
 

@@ -71,26 +71,15 @@ func MustLoadPatterns(lang string) *PatternSet {
 	return ps
 }
 
-// resolveCapNames converts a slice of capability name strings (e.g. "exec",
-// "fs:read") to typed Capability values, returning an error for unknown names.
+// resolveCapNames validates capability name strings against the known taxonomy
+// and returns them as typed Capability values.
 func resolveCapNames(names []string, location string) ([]Capability, error) {
 	caps := make([]Capability, 0, len(names))
 	for _, name := range names {
-		c, ok := capByName(name)
-		if !ok {
+		if !KnownCapability(name) {
 			return nil, fmt.Errorf("unknown capability %q in %s", name, location)
 		}
-		caps = append(caps, c)
+		caps = append(caps, name)
 	}
 	return caps, nil
-}
-
-// capByName does a reverse lookup of the capNames map (name string → Capability).
-func capByName(name string) (Capability, bool) {
-	for cap, capName := range capNames {
-		if capName == name {
-			return cap, true
-		}
-	}
-	return 0, false
 }

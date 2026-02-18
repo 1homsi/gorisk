@@ -68,7 +68,7 @@ func Run(args []string) int {
 		return 2
 	}
 
-	minLevel := riskValue(*minRisk)
+	minLevel := capability.RiskValue(*minRisk)
 
 	// build package-level nodes — skip stdlib (no module) and low-risk if filtered
 	included := make(map[string]bool)
@@ -79,8 +79,8 @@ func Run(args []string) int {
 		}
 		caps := pkg.Capabilities
 		score := caps.Score
-		risk := riskLevel(caps)
-		if riskValue(risk) < minLevel {
+		risk := caps.RiskLevel()
+		if capability.RiskValue(risk) < minLevel {
 			continue
 		}
 		included[pkgPath] = true
@@ -160,32 +160,10 @@ func Run(args []string) int {
 	return 0
 }
 
-func riskLevel(caps capability.CapabilitySet) string {
-	switch {
-	case caps.Score >= 30:
-		return "HIGH"
-	case caps.Score >= 10:
-		return "MEDIUM"
-	default:
-		return "LOW"
-	}
-}
-
 func shortLabel(pkgPath string) string {
 	parts := strings.Split(pkgPath, "/")
 	if len(parts) <= 2 {
 		return pkgPath
 	}
 	return strings.Join(parts[len(parts)-2:], "/")
-}
-
-func riskValue(level string) int {
-	switch strings.ToLower(level) {
-	case "high":
-		return 3
-	case "medium":
-		return 2
-	default:
-		return 1
-	}
 }

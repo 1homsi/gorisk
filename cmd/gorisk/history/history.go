@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 
 	"github.com/1homsi/gorisk/internal/analyzer"
@@ -37,10 +38,14 @@ func Run(args []string) int {
 	case "show":
 		return runShow(dir, *jsonOut)
 	case "", "diff":
-		return runDiff(dir, *jsonOut)
+		var diffArgs []string
+		if len(rest) > 1 {
+			diffArgs = rest[1:]
+		}
+		return runDiff(dir, *jsonOut, diffArgs...)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n", sub)
-		fmt.Fprintln(os.Stderr, "usage: gorisk history [record|diff|show] [--json]")
+		fmt.Fprintln(os.Stderr, "usage: gorisk history [record|diff|show] [--json] [N [M]]")
 		return 2
 	}
 }
@@ -110,19 +115,49 @@ func runRecord(dir, lang string) int {
 	return 0
 }
 
-func runDiff(dir string, jsonOut bool) int {
+func runDiff(dir string, jsonOut bool, indices ...string) int {
 	h, err := history.Load(dir)
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "load history:", err)
 		return 2
 	}
-	if len(h.Snapshots) < 2 {
+	n := len(h.Snapshots)
+	if n < 2 {
 		fmt.Fprintln(os.Stderr, "need at least 2 snapshots; run: gorisk history record")
 		return 1
 	}
 
-	old := h.Snapshots[len(h.Snapshots)-2]
-	cur := h.Snapshots[len(h.Snapshots)-1]
+	parseIdx := func(s string) (int, bool) {
+		v, err := strconv.Atoi(s)
+		if err != nil || v < 1 || v > n {
+			fmt.Fprintf(os.Stderr, "snapshot index %q out of range 1..%d\n", s, n)
+			return 0, false
+		}
+		return v - 1, true
+	}
+
+	oldIdx, curIdx := n-2, n-1
+	switch len(indices) {
+	case 1:
+		i, ok := parseIdx(indices[0])
+		if !ok {
+			return 2
+		}
+		oldIdx = i
+	case 2:
+		i, ok := parseIdx(indices[0])
+		if !ok {
+			return 2
+		}
+		j, ok := parseIdx(indices[1])
+		if !ok {
+			return 2
+		}
+		oldIdx, curIdx = i, j
+	}
+
+	old := h.Snapshots[oldIdx]
+	cur := h.Snapshots[curIdx]
 	diffs := history.Diff(old, cur)
 
 	if jsonOut {

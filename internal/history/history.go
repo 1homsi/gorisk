@@ -5,6 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"time"
+
+	"github.com/1homsi/gorisk/internal/capability"
 )
 
 const fileName = ".gorisk-history.json"
@@ -92,9 +94,9 @@ func Diff(old, cur Snapshot) []ModuleDiff {
 		nmCopy := nm
 		change := "unchanged"
 		switch {
-		case riskValue(nm.RiskLevel) > riskValue(om.RiskLevel):
+		case capability.RiskValue(nm.RiskLevel) > capability.RiskValue(om.RiskLevel):
 			change = "escalated"
-		case riskValue(nm.RiskLevel) < riskValue(om.RiskLevel):
+		case capability.RiskValue(nm.RiskLevel) < capability.RiskValue(om.RiskLevel):
 			change = "improved"
 		case nm.EffectiveScore > om.EffectiveScore:
 			change = "escalated"
@@ -112,15 +114,4 @@ func Diff(old, cur Snapshot) []ModuleDiff {
 	}
 
 	return diffs
-}
-
-func riskValue(level string) int {
-	switch level {
-	case "HIGH":
-		return 3
-	case "MEDIUM":
-		return 2
-	default:
-		return 1
-	}
 }

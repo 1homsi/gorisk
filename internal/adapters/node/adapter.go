@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/1homsi/gorisk/internal/graph"
 )
@@ -92,6 +94,42 @@ func (a *Adapter) Load(dir string) (*graph.DependencyGraph, error) {
 	}
 
 	g.Edges[rootName] = rootEdges
+
+	for _, wsDir := range workspaceDirs(dir) {
+		wsName := filepath.Base(wsDir)
+		if name := readPackageJSONName(wsDir); name != "" {
+			wsName = name
+		}
+		if _, exists := g.Modules[wsName]; exists {
+			continue
+		}
+		wsMod := &graph.Module{
+			Path: wsName,
+			Dir:  wsDir,
+			Main: true,
+		}
+		g.Modules[wsName] = wsMod
+
+		wsPkg := &graph.Package{
+			ImportPath:   wsName,
+			Name:         wsName,
+			Module:       wsMod,
+			Dir:          wsDir,
+			Capabilities: Detect(wsDir),
+		}
+		g.Packages[wsName] = wsPkg
+		wsMod.Packages = append(wsMod.Packages, wsPkg)
+
+		wsDirect := readDirectDeps(wsDir)
+		var wsEdges []string
+		for dep := range wsDirect {
+			if _, exists := g.Packages[dep]; exists {
+				wsEdges = append(wsEdges, dep)
+			}
+		}
+		g.Edges[wsName] = wsEdges
+	}
+
 	return g, nil
 }
 
@@ -107,4 +145,66 @@ func readPackageJSONName(dir string) string {
 		return ""
 	}
 	return pkgJSON.Name
+}
+
+var rePnpmWorkspace = regexp.MustCompile(`^\s*-\s+['"]?([^'"#\s]+)['"]?`)
+
+func workspaceDirs(root string) []string {
+	var patterns []string
+
+	data, err := os.ReadFile(filepath.Join(root, "package.json"))
+	if err == nil {
+		var pkgJSON struct {
+			Workspaces json.RawMessage `json:"workspaces"`
+		}
+		if json.Unmarshal(data, &pkgJSON) == nil && len(pkgJSON.Workspaces) > 0 {
+			var list []string
+			if json.Unmarshal(pkgJSON.Workspaces, &list) == nil {
+				patterns = append(patterns, list...)
+			} else {
+				var obj struct {
+					Packages []string `json:"packages"`
+				}
+				if json.Unmarshal(pkgJSON.Workspaces, &obj) == nil {
+					patterns = append(patterns, obj.Packages...)
+				}
+			}
+		}
+	}
+
+	if yamlData, err := os.ReadFile(filepath.Join(root, "pnpm-workspace.yaml")); err == nil {
+		for _, line := range strings.Split(string(yamlData), "\n") {
+			if m := rePnpmWorkspace.FindStringSubmatch(line); m != nil {
+				patterns = append(patterns, m[1])
+			}
+		}
+	}
+
+	if len(patterns) == 0 {
+		return nil
+	}
+
+	seen := make(map[string]bool)
+	var dirs []string
+	for _, pattern := range patterns {
+		matches, err := filepath.Glob(filepath.Join(root, pattern))
+		if err != nil {
+			continue
+		}
+		for _, match := range matches {
+			if seen[match] {
+				continue
+			}
+			info, err := os.Stat(match)
+			if err != nil || !info.IsDir() {
+				continue
+			}
+			if _, err := os.Stat(filepath.Join(match, "package.json")); err != nil {
+				continue
+			}
+			seen[match] = true
+			dirs = append(dirs, match)
+		}
+	}
+	return dirs
 }

@@ -117,24 +117,28 @@ func buildDiffs(oldCaps, newCaps map[string]capability.CapabilitySet) []CapDiff 
 		allPkgs[p] = struct{}{}
 	}
 
+	allCaps := []capability.Capability{
+		capability.CapFSRead, capability.CapFSWrite, capability.CapNetwork,
+		capability.CapExec, capability.CapEnv, capability.CapUnsafe,
+		capability.CapCrypto, capability.CapReflect, capability.CapPlugin,
+	}
+
 	var diffs []CapDiff
 	for pkg := range allPkgs {
 		old := oldCaps[pkg]
 		nw := newCaps[pkg]
 
 		var added, removed capability.CapabilitySet
-		var c capability.Capability = 1
-		for c != 0 && c <= capability.CapPlugin {
+		for _, c := range allCaps {
 			if nw.Has(c) && !old.Has(c) {
 				added.Add(c)
 			}
 			if old.Has(c) && !nw.Has(c) {
 				removed.Add(c)
 			}
-			c <<= 1
 		}
 
-		if added.Caps == 0 && removed.Caps == 0 {
+		if added.IsEmpty() && removed.IsEmpty() {
 			continue
 		}
 

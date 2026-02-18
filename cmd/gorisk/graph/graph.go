@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/1homsi/gorisk/internal/analyzer"
+	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/transitive"
 )
 
@@ -38,10 +39,10 @@ func Run(args []string) int {
 
 	risks := transitive.ComputeTransitiveRisk(g)
 
-	minLevel := riskValue(*minRisk)
+	minLevel := capability.RiskValue(*minRisk)
 	var filtered []transitive.ModuleRisk
 	for _, r := range risks {
-		if riskValue(r.RiskLevel) >= minLevel {
+		if capability.RiskValue(r.RiskLevel) >= minLevel {
 			filtered = append(filtered, r)
 		}
 	}
@@ -100,15 +101,4 @@ func Run(args []string) int {
 	}
 
 	return 0
-}
-
-func riskValue(level string) int {
-	switch strings.ToLower(level) {
-	case "high":
-		return 3
-	case "medium":
-		return 2
-	default:
-		return 1
-	}
 }

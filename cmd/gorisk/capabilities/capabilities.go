@@ -4,9 +4,9 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strings"
 
 	"github.com/1homsi/gorisk/internal/analyzer"
+	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/report"
 )
 
@@ -70,16 +70,5 @@ func Run(args []string) int {
 }
 
 func meetsMinRisk(level, min string) bool {
-	return riskValue(level) >= riskValue(min)
-}
-
-func riskValue(level string) int {
-	switch strings.ToLower(level) {
-	case "high":
-		return 3
-	case "medium":
-		return 2
-	default:
-		return 1
-	}
+	return capability.RiskValue(level) >= capability.RiskValue(min)
 }

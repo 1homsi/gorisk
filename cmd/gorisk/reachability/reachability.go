@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/1homsi/gorisk/internal/analyzer"
+	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/reachability"
 )
 
@@ -39,10 +40,10 @@ func Run(args []string) int {
 		return 2
 	}
 
-	minLevel := riskValue(*minRisk)
+	minLevel := capability.RiskValue(*minRisk)
 	var filtered []reachability.ReachabilityReport
 	for _, r := range reports {
-		if riskValue(r.ReachableCaps.RiskLevel()) >= minLevel {
+		if capability.RiskValue(r.ReachableCaps.RiskLevel()) >= minLevel {
 			filtered = append(filtered, r)
 		}
 	}
@@ -113,15 +114,4 @@ func Run(args []string) int {
 	}
 
 	return 0
-}
-
-func riskValue(level string) int {
-	switch strings.ToLower(level) {
-	case "high":
-		return 3
-	case "medium":
-		return 2
-	default:
-		return 1
-	}
 }

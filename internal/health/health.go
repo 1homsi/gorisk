@@ -1,10 +1,42 @@
 package health
 
 import (
+	"sync"
 	"time"
 
 	"github.com/1homsi/gorisk/internal/report"
 )
+
+type ModuleRef struct {
+	Path    string
+	Version string
+}
+
+func ScoreAll(mods []ModuleRef) []report.HealthReport {
+	results := make([]report.HealthReport, len(mods))
+	jobs := make(chan int, len(mods))
+	for i := range mods {
+		jobs <- i
+	}
+	close(jobs)
+
+	workers := 10
+	if len(mods) < workers {
+		workers = len(mods)
+	}
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for range workers {
+		go func() {
+			defer wg.Done()
+			for i := range jobs {
+				results[i] = Score(mods[i].Path, mods[i].Version)
+			}
+		}()
+	}
+	wg.Wait()
+	return results
+}
 
 func Score(modulePath, version string) report.HealthReport {
 	hr := report.HealthReport{

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/1homsi/gorisk/internal/analyzer"
+	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/health"
 	"github.com/1homsi/gorisk/internal/report"
 )
@@ -45,17 +46,27 @@ func Run(args []string) int {
 
 	p := policy{FailOn: "high", MaxHealthScore: 30}
 	if *policyFile != "" {
-		data, err := os.ReadFile(*policyFile)
+		f, err := os.Open(*policyFile)
 		if err != nil {
 			fmt.Fprintln(os.Stderr, "load policy:", err)
 			return 2
 		}
-		if err := json.Unmarshal(data, &p); err != nil {
+		dec := json.NewDecoder(f)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&p); err != nil {
+			f.Close()
 			fmt.Fprintln(os.Stderr, "parse policy:", err)
 			return 2
 		}
+		f.Close()
 		if p.FailOn != "" {
-			*failOn = p.FailOn
+			switch p.FailOn {
+			case "low", "medium", "high":
+				*failOn = p.FailOn
+			default:
+				fmt.Fprintf(os.Stderr, "policy: fail_on must be low|medium|high, got %q\n", p.FailOn)
+				return 2
+			}
 		}
 	}
 
@@ -104,16 +115,16 @@ func Run(args []string) int {
 		})
 	}
 
-	var healthReports []report.HealthReport
 	seen := make(map[string]bool)
+	var mods []health.ModuleRef
 	for _, mod := range g.Modules {
 		if mod.Main || seen[mod.Path] {
 			continue
 		}
 		seen[mod.Path] = true
-		hr := health.Score(mod.Path, mod.Version)
-		healthReports = append(healthReports, hr)
+		mods = append(mods, health.ModuleRef{Path: mod.Path, Version: mod.Version})
 	}
+	healthReports := health.ScoreAll(mods)
 
 	sr := report.ScanReport{
 		Capabilities: capReports,
@@ -121,7 +132,7 @@ func Run(args []string) int {
 		Passed:       true,
 	}
 
-	failLevel := riskValue(*failOn)
+	failLevel := capability.RiskValue(*failOn)
 
 	for _, cr := range capReports {
 		if excluded[cr.Package] {
@@ -132,7 +143,7 @@ func Run(args []string) int {
 			continue
 		}
 
-		if riskValue(cr.RiskLevel) >= failLevel {
+		if capability.RiskValue(cr.RiskLevel) >= failLevel {
 			sr.Passed = false
 			sr.FailReason = fmt.Sprintf("package %s has %s risk capabilities", cr.Package, cr.RiskLevel)
 			break
@@ -186,15 +197,4 @@ func Run(args []string) int {
 		return 1
 	}
 	return 0
-}
-
-func riskValue(level string) int {
-	switch strings.ToLower(level) {
-	case "high":
-		return 3
-	case "medium":
-		return 2
-	default:
-		return 1
-	}
 }
