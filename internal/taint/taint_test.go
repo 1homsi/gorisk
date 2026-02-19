@@ -134,3 +134,126 @@ func TestAnalyzeEmptyPackages(t *testing.T) {
 		t.Errorf("expected no findings for empty packages, got: %+v", findings)
 	}
 }
+
+func TestAnalyzeConfidence(t *testing.T) {
+	// Create a package with capabilities that have evidence with known confidence
+	pkg := &graph.Package{
+		ImportPath: "test/pkg",
+		Module:     &graph.Module{Path: "test"},
+	}
+	// Add env capability with confidence 0.90
+	pkg.Capabilities.AddWithEvidence(capability.CapEnv, capability.CapabilityEvidence{
+		Context:    "test",
+		Via:        "import",
+		Confidence: 0.90,
+	})
+	// Add exec capability with confidence 0.75
+	pkg.Capabilities.AddWithEvidence(capability.CapExec, capability.CapabilityEvidence{
+		Context:    "test",
+		Via:        "callSite",
+		Confidence: 0.75,
+	})
+
+	pkgs := map[string]*graph.Package{"test/pkg": pkg}
+	findings := Analyze(pkgs)
+
+	// Should find env→exec taint
+	var envExecFinding *TaintFinding
+	for i := range findings {
+		if findings[i].Source == capability.CapEnv && findings[i].Sink == capability.CapExec {
+			envExecFinding = &findings[i]
+			break
+		}
+	}
+
+	if envExecFinding == nil {
+		t.Fatal("expected env→exec finding")
+	}
+
+	// Confidence should be min(0.90, 0.75) = 0.75
+	if envExecFinding.Confidence != 0.75 {
+		t.Errorf("expected confidence 0.75, got %.2f", envExecFinding.Confidence)
+	}
+
+	// Evidence chain should have two entries
+	if len(envExecFinding.EvidenceChain) != 2 {
+		t.Errorf("expected evidence chain length 2, got %d", len(envExecFinding.EvidenceChain))
+	}
+}
+
+func TestAnalyzeConfidenceDowngrade(t *testing.T) {
+	// Create a package with low confidence capabilities
+	pkg := &graph.Package{
+		ImportPath: "test/pkg",
+		Module:     &graph.Module{Path: "test"},
+	}
+	// Add network with confidence 0.60 (< 0.70)
+	pkg.Capabilities.AddWithEvidence(capability.CapNetwork, capability.CapabilityEvidence{
+		Context:    "test",
+		Via:        "callSite",
+		Confidence: 0.60,
+	})
+	// Add exec with confidence 0.80
+	pkg.Capabilities.AddWithEvidence(capability.CapExec, capability.CapabilityEvidence{
+		Context:    "test",
+		Via:        "callSite",
+		Confidence: 0.80,
+	})
+
+	pkgs := map[string]*graph.Package{"test/pkg": pkg}
+	findings := Analyze(pkgs)
+
+	// Should find network→exec taint
+	var netExecFinding *TaintFinding
+	for i := range findings {
+		if findings[i].Source == capability.CapNetwork && findings[i].Sink == capability.CapExec {
+			netExecFinding = &findings[i]
+			break
+		}
+	}
+
+	if netExecFinding == nil {
+		t.Fatal("expected network→exec finding")
+	}
+
+	// Confidence is min(0.60, 0.80) = 0.60, which is < 0.70
+	// So risk should be downgraded from HIGH to MEDIUM
+	if netExecFinding.Risk != "MEDIUM" {
+		t.Errorf("expected downgraded risk MEDIUM, got %s", netExecFinding.Risk)
+	}
+}
+
+func TestAnalyzeNewRules(t *testing.T) {
+	tests := []struct {
+		name   string
+		source capability.Capability
+		sink   capability.Capability
+		risk   string
+	}{
+		{"network→plugin", capability.CapNetwork, capability.CapPlugin, "HIGH"},
+		{"fs:read→plugin", capability.CapFSRead, capability.CapPlugin, "HIGH"},
+		{"env→crypto", capability.CapEnv, capability.CapCrypto, "MEDIUM"},
+		{"network→reflect", capability.CapNetwork, capability.CapReflect, "MEDIUM"},
+		{"fs:read→unsafe", capability.CapFSRead, capability.CapUnsafe, "HIGH"},
+		{"env→network", capability.CapEnv, capability.CapNetwork, "MEDIUM"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pkg := makePackage("test/pkg", "test", tt.source, tt.sink)
+			pkgs := map[string]*graph.Package{"test/pkg": pkg}
+			findings := Analyze(pkgs)
+
+			found := false
+			for _, f := range findings {
+				if f.Source == tt.source && f.Sink == tt.sink && f.Risk == tt.risk {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Errorf("expected %s→%s %s finding, got: %+v", tt.source, tt.sink, tt.risk, findings)
+			}
+		})
+	}
+}

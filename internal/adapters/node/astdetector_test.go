@@ -213,3 +213,81 @@ func TestDetectFileASTFallback(t *testing.T) {
 		t.Log("no caps detected by scanFile (possibly fs not in patterns)")
 	}
 }
+
+func TestBuildProjectGraph(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create a simple project with two files
+	file1 := filepath.Join(dir, "main.js")
+	file2 := filepath.Join(dir, "helper.js")
+
+	src1 := `const cp = require('child_process');
+cp.exec('ls');
+`
+	src2 := `const net = require('net');
+const server = net.createServer();
+`
+
+	if err := os.WriteFile(file1, []byte(src1), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file2, []byte(src2), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	graph, err := BuildProjectGraph(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	if len(graph.Files) != 2 {
+		t.Errorf("expected 2 files in graph, got %d", len(graph.Files))
+	}
+
+	if _, ok := graph.Files[file1]; !ok {
+		t.Errorf("expected %s in graph.Files", file1)
+	}
+	if _, ok := graph.Files[file2]; !ok {
+		t.Errorf("expected %s in graph.Files", file2)
+	}
+}
+
+func TestPropagateAcrossFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	file1 := filepath.Join(dir, "a.js")
+	file2 := filepath.Join(dir, "b.js")
+
+	src1 := `const cp = require('child_process');`
+	src2 := `const net = require('net');`
+
+	if err := os.WriteFile(file1, []byte(src1), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(file2, []byte(src2), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	caps1, _ := DetectFileAST(file1)
+	caps2, _ := DetectFileAST(file2)
+
+	perFile := map[string]capability.CapabilitySet{
+		file1: caps1,
+		file2: caps2,
+	}
+
+	graph := ProjectGraph{
+		Files:   make(map[string]SymbolTable),
+		Exports: make(map[string]map[string]capability.CapabilitySet),
+	}
+
+	merged := PropagateAcrossFiles(graph, perFile)
+
+	// Should contain capabilities from both files
+	if caps1.Has(capability.CapExec) && !merged.Has(capability.CapExec) {
+		t.Errorf("expected merged to have CapExec")
+	}
+	if caps2.Has(capability.CapNetwork) && !merged.Has(capability.CapNetwork) {
+		t.Errorf("expected merged to have CapNetwork")
+	}
+}

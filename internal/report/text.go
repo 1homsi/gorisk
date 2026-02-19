@@ -270,11 +270,16 @@ func WriteTaintFindings(w io.Writer, findings []taint.TaintFinding) {
 			mod = mod[:modW-3] + "..."
 		}
 		flow := f.Source + " → " + f.Sink
-		fmt.Fprintf(w, "  %s%-6s%s  %-*s  %-18s  %s\n",
+		confStr := ""
+		if f.Confidence > 0 {
+			confStr = fmt.Sprintf(" [conf: %.2f]", f.Confidence)
+		}
+		fmt.Fprintf(w, "  %s%-6s%s  %-*s  %-18s  %s%s\n",
 			color, f.Risk, colorReset,
 			modW, mod,
 			flow,
-			f.Note)
+			f.Note,
+			confStr)
 	}
 	fmt.Fprintln(w)
 }

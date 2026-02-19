@@ -8,14 +8,22 @@ import (
 	"github.com/1homsi/gorisk/internal/graph"
 )
 
+// TaintEvidence represents a single capability in the taint evidence chain.
+type TaintEvidence struct {
+	Capability capability.Capability `json:"capability"`
+	Confidence float64               `json:"confidence"`
+}
+
 // TaintFinding records a single source→sink capability pair detected in a package.
 type TaintFinding struct {
-	Package string                `json:"package"`
-	Module  string                `json:"module,omitempty"`
-	Source  capability.Capability `json:"source"`
-	Sink    capability.Capability `json:"sink"`
-	Risk    string                `json:"risk"`
-	Note    string                `json:"note"`
+	Package       string                `json:"package"`
+	Module        string                `json:"module,omitempty"`
+	Source        capability.Capability `json:"source"`
+	Sink          capability.Capability `json:"sink"`
+	Risk          string                `json:"risk"`
+	Note          string                `json:"note"`
+	Confidence    float64               `json:"confidence"`               // min(source_conf, sink_conf)
+	EvidenceChain []TaintEvidence       `json:"evidence_chain,omitempty"` // [source_evidence, sink_evidence]
 }
 
 type taintRule struct {
@@ -27,6 +35,7 @@ type taintRule struct {
 
 // taintRules defines the dangerous source→sink pairs to detect.
 var taintRules = []taintRule{
+	// Existing rules
 	{capability.CapEnv, capability.CapExec, "HIGH", "env var → exec — injection risk"},
 	{capability.CapNetwork, capability.CapExec, "HIGH", "network input → exec — RCE risk"},
 	{capability.CapFSRead, capability.CapExec, "HIGH", "file content → exec injection"},
@@ -34,6 +43,14 @@ var taintRules = []taintRule{
 	{capability.CapNetwork, capability.CapFSWrite, "MEDIUM", "network data written to disk"},
 	{capability.CapFSRead, capability.CapNetwork, "MEDIUM", "file content exfiltration"},
 	{capability.CapEnv, capability.CapFSWrite, "LOW", "env expansion in file path"},
+
+	// New rules for expanded taint analysis
+	{capability.CapNetwork, capability.CapPlugin, "HIGH", "remote plugin injection"},
+	{capability.CapFSRead, capability.CapPlugin, "HIGH", "dynamic loading from attacker-controlled file"},
+	{capability.CapEnv, capability.CapCrypto, "MEDIUM", "env-sourced key material"},
+	{capability.CapNetwork, capability.CapReflect, "MEDIUM", "runtime behavior from network"},
+	{capability.CapFSRead, capability.CapUnsafe, "HIGH", "attacker-controlled memory ops"},
+	{capability.CapEnv, capability.CapNetwork, "MEDIUM", "env-configured exfil endpoint"},
 }
 
 // Analyze inspects all packages in the dependency graph and returns a list of
@@ -50,14 +67,36 @@ func Analyze(pkgs map[string]*graph.Package) []TaintFinding {
 
 		for _, rule := range taintRules {
 			if caps.Has(rule.Source) && caps.Has(rule.Sink) {
-				findings = append(findings, TaintFinding{
-					Package: pkg.ImportPath,
-					Module:  modPath,
-					Source:  rule.Source,
-					Sink:    rule.Sink,
-					Risk:    rule.Risk,
-					Note:    rule.Note,
-				})
+				// Compute confidence as min(source_conf, sink_conf)
+				sourceConf := caps.Confidence(rule.Source)
+				sinkConf := caps.Confidence(rule.Sink)
+				conf := min(sourceConf, sinkConf)
+
+				// If no evidence recorded, use default confidence of 0
+				if conf == 0 {
+					conf = 0.0
+				}
+
+				// Downgrade severity one level if confidence < 0.70
+				risk := rule.Risk
+				if conf > 0 && conf < 0.70 {
+					risk = downgradeSeverity(risk)
+				}
+
+				finding := TaintFinding{
+					Package:    pkg.ImportPath,
+					Module:     modPath,
+					Source:     rule.Source,
+					Sink:       rule.Sink,
+					Risk:       risk,
+					Note:       rule.Note,
+					Confidence: conf,
+					EvidenceChain: []TaintEvidence{
+						{Capability: rule.Source, Confidence: sourceConf},
+						{Capability: rule.Sink, Confidence: sinkConf},
+					},
+				}
+				findings = append(findings, finding)
 			}
 		}
 	}
@@ -65,6 +104,26 @@ func Analyze(pkgs map[string]*graph.Package) []TaintFinding {
 	// Sort: HIGH first, then MEDIUM, then LOW; within risk level sort by package.
 	sortFindings(findings)
 	return findings
+}
+
+// downgradeSeverity downgrades the severity level by one step.
+func downgradeSeverity(level string) string {
+	switch level {
+	case "HIGH":
+		return "MEDIUM"
+	case "MEDIUM":
+		return "LOW"
+	default:
+		return level
+	}
+}
+
+// min returns the minimum of two float64 values.
+func min(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 func sortFindings(findings []TaintFinding) {

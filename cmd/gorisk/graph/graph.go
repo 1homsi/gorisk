@@ -10,6 +10,9 @@ import (
 
 	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/capability"
+	"github.com/1homsi/gorisk/internal/health"
+	"github.com/1homsi/gorisk/internal/priority"
+	"github.com/1homsi/gorisk/internal/taint"
 	"github.com/1homsi/gorisk/internal/transitive"
 )
 
@@ -37,27 +40,85 @@ func Run(args []string) int {
 		return 2
 	}
 
+	// Compute health scores and taint findings for composite scoring
+	seen := make(map[string]bool)
+	var mods []health.ModuleRef
+	for _, mod := range g.Modules {
+		if mod.Main || seen[mod.Path] {
+			continue
+		}
+		seen[mod.Path] = true
+		mods = append(mods, health.ModuleRef{Path: mod.Path, Version: mod.Version})
+	}
+	healthReports, _ := health.ScoreAll(mods)
+	taintFindings := taint.Analyze(g.Packages)
+
+	// Build module→CVE count and module→taint findings maps
+	moduleCVEs := make(map[string]int)
+	for _, hr := range healthReports {
+		moduleCVEs[hr.Module] = hr.CVECount
+	}
+
+	moduleTaints := make(map[string][]taint.TaintFinding)
+	for _, tf := range taintFindings {
+		moduleTaints[tf.Module] = append(moduleTaints[tf.Module], tf)
+	}
+
 	risks := transitive.ComputeTransitiveRisk(g)
 
-	minLevel := capability.RiskValue(*minRisk)
-	var filtered []transitive.ModuleRisk
+	// Augment risks with composite scores
+	type moduleRiskWithComposite struct {
+		transitive.ModuleRisk
+		CompositeScore float64
+	}
+
+	var risksWithComposite []moduleRiskWithComposite
 	for _, r := range risks {
+		// Get the maximum capability set for this module
+		var maxCaps capability.CapabilitySet
+		for _, pkg := range g.Packages {
+			if pkg.Module != nil && pkg.Module.Path == r.Module {
+				if pkg.Capabilities.Score > maxCaps.Score {
+					maxCaps = pkg.Capabilities
+				}
+			}
+		}
+
+		composite := priority.Compute(
+			maxCaps,
+			nil, // reachability unknown
+			moduleCVEs[r.Module],
+			moduleTaints[r.Module],
+		)
+
+		risksWithComposite = append(risksWithComposite, moduleRiskWithComposite{
+			ModuleRisk:     r,
+			CompositeScore: composite.Composite,
+		})
+	}
+
+	minLevel := capability.RiskValue(*minRisk)
+	var filtered []moduleRiskWithComposite
+	for _, r := range risksWithComposite {
 		if capability.RiskValue(r.RiskLevel) >= minLevel {
 			filtered = append(filtered, r)
 		}
 	}
 
+	// Sort by composite score instead of effective score
 	sort.Slice(filtered, func(i, j int) bool {
-		return filtered[i].EffectiveScore > filtered[j].EffectiveScore
+		return filtered[i].CompositeScore > filtered[j].CompositeScore
 	})
 
 	if *jsonOut {
 		enc := json.NewEncoder(os.Stdout)
 		enc.SetIndent("", "  ")
-		if filtered == nil {
-			filtered = []transitive.ModuleRisk{}
+		// Convert back to plain ModuleRisk for JSON output
+		plainRisks := make([]transitive.ModuleRisk, 0, len(filtered))
+		for _, r := range filtered {
+			plainRisks = append(plainRisks, r.ModuleRisk)
 		}
-		enc.Encode(filtered)
+		enc.Encode(plainRisks)
 		return 0
 	}
 
@@ -80,17 +141,18 @@ func Run(args []string) int {
 		}
 	}
 
-	fmt.Printf("%s%-60s  %6s  %6s  %6s  %5s  %-6s%s\n",
-		bold, "MODULE", "DIRECT", "TRANS.", "EFFECT", "DEPTH", "RISK", reset)
-	fmt.Println(strings.Repeat("─", 100))
+	fmt.Printf("%s%-55s  %6s  %6s  %6s  %8s  %5s  %-6s%s\n",
+		bold, "MODULE", "DIRECT", "TRANS.", "EFFECT", "COMPOSIT", "DEPTH", "RISK", reset)
+	fmt.Println(strings.Repeat("─", 110))
 
 	for _, r := range filtered {
 		col := colorForRisk(r.RiskLevel)
-		fmt.Printf("%-60s  %6d  %6d  %6d  %5d  %s%-6s%s\n",
+		fmt.Printf("%-55s  %6d  %6d  %6d  %8.1f  %5d  %s%-6s%s\n",
 			r.Module,
 			r.DirectScore,
 			r.TransitiveScore,
 			r.EffectiveScore,
+			r.CompositeScore,
 			r.Depth,
 			col, r.RiskLevel, reset,
 		)
