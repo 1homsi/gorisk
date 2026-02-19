@@ -46,8 +46,8 @@ runs:
       run: |
         SARIF_FILE="gorisk-results.sarif"
         SCAN_ARGS="--fail-on ${{ inputs.fail-on }}"
-        if [ -n "${{ inputs.policy-file }}" ]; then
-          SCAN_ARGS="$SCAN_ARGS --policy ${{ inputs.policy-file }}"
+        if [ -n "${{ inputs['policy-file'] }}" ]; then
+          SCAN_ARGS="$SCAN_ARGS --policy ${{ inputs['policy-file'] }}"
         fi
 
         gorisk scan --sarif --lang ${{ inputs.lang }} $SCAN_ARGS > "$SARIF_FILE"
