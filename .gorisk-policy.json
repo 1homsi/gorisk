@@ -4,17 +4,43 @@
   "min_health_score": 0,
   "block_archived": false,
   "deny_capabilities": [],
-  "allow_exceptions": [],
+  "allow_exceptions": [
+    {
+      "package": "github.com/1homsi/gorisk",
+      "taint": ["env→exec", "fs:read→exec", "fs:read→network", "network→fs:write", "env→fs:write"],
+      "justification": "Gorisk CLI tool legitimately uses git operations (exec), reads project files, and makes API calls for health/CVE checks. All inputs are from trusted sources (local filesystem, GitHub/OSV APIs).",
+      "expires": "2027-02-19"
+    },
+    {
+      "package": "golang.org/x/tools",
+      "taint": ["env→exec", "fs:read→exec", "fs:read→unsafe", "env→crypto", "env→fs:write"],
+      "justification": "Go tools package used for AST analysis and package loading. Exec calls are for go command invocations with controlled inputs. Unsafe operations are for AST manipulation, crypto for build tooling.",
+      "expires": "2027-02-19"
+    }
+  ],
   "max_dep_depth": 0,
   "exclude_packages": [
+    "github.com/1homsi/gorisk/cmd/gorisk",
+    "github.com/1homsi/gorisk/cmd/gorisk/capabilities",
+    "github.com/1homsi/gorisk/cmd/gorisk/diff",
+    "github.com/1homsi/gorisk/cmd/gorisk/explain",
+    "github.com/1homsi/gorisk/cmd/gorisk/graph",
+    "github.com/1homsi/gorisk/cmd/gorisk/history",
+    "github.com/1homsi/gorisk/cmd/gorisk/impact",
+    "github.com/1homsi/gorisk/cmd/gorisk/licenses",
+    "github.com/1homsi/gorisk/cmd/gorisk/pr",
+    "github.com/1homsi/gorisk/cmd/gorisk/reachability",
+    "github.com/1homsi/gorisk/cmd/gorisk/sbom",
+    "github.com/1homsi/gorisk/cmd/gorisk/scan",
+    "github.com/1homsi/gorisk/cmd/gorisk/trace",
+    "github.com/1homsi/gorisk/cmd/gorisk/upgrade",
+    "github.com/1homsi/gorisk/cmd/gorisk/viz",
     "github.com/1homsi/gorisk/internal/upgrade",
     "github.com/1homsi/gorisk/internal/graph",
     "github.com/1homsi/gorisk/internal/health",
     "github.com/1homsi/gorisk/internal/license",
     "github.com/1homsi/gorisk/internal/prdiff",
     "github.com/1homsi/gorisk/internal/reachability",
-    "github.com/1homsi/gorisk/internal/adapters/node",
-    "github.com/1homsi/gorisk/cmd/gorisk/trace",
-    "github.com/1homsi/gorisk/cmd/gorisk/history"
+    "github.com/1homsi/gorisk/internal/adapters/node"
   ]
 }
