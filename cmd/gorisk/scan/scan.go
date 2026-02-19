@@ -77,12 +77,6 @@ func buildExceptions(allowExceptions []PolicyException) (
 			}
 		}
 
-		// Check justification
-		if ex.Justification == "" && ex.Ticket == "" {
-			fmt.Fprintf(os.Stderr, "[WARN] exception for %s has no justification\n", ex.Package)
-			stats.MissingJustify++
-		}
-
 		// Don't apply expired exceptions
 		if expired {
 			continue
