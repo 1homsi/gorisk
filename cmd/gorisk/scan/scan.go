@@ -85,23 +85,29 @@ func buildExceptions(allowExceptions []PolicyException) (
 		// Track if this exception was applied
 		applied := false
 
-		// Add capability exceptions
+		// Add capability exceptions (merge if package already has exceptions)
 		if len(ex.Capabilities) > 0 {
-			caps := make(map[string]bool)
+			caps, ok := exceptions[ex.Package]
+			if !ok {
+				caps = make(map[string]bool)
+				exceptions[ex.Package] = caps
+			}
 			for _, c := range ex.Capabilities {
 				caps[strings.ToLower(c)] = true
 			}
-			exceptions[ex.Package] = caps
 			applied = true
 		}
 
-		// Add taint exceptions
+		// Add taint exceptions (merge if package already has exceptions)
 		if len(ex.Taint) > 0 {
-			taints := make(map[string]bool)
+			taints, ok := taintExceptions[ex.Package]
+			if !ok {
+				taints = make(map[string]bool)
+				taintExceptions[ex.Package] = taints
+			}
 			for _, t := range ex.Taint {
 				taints[t] = true
 			}
-			taintExceptions[ex.Package] = taints
 			stats.TaintSuppressed += len(ex.Taint)
 			applied = true
 		}
@@ -306,7 +312,7 @@ func Run(args []string) int {
 			continue
 		}
 		pkg := g.Packages[cr.Package]
-		if pkg == nil || pkg.Module == nil || !pkg.Module.Main {
+		if pkg == nil || pkg.Module == nil {
 			continue
 		}
 
