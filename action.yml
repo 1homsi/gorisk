@@ -36,7 +36,9 @@ runs:
   steps:
     - name: Install gorisk
       shell: bash
-      run: cd "$GITHUB_ACTION_PATH" && go install ./cmd/gorisk
+      run: |
+        cd "$GITHUB_ACTION_PATH" && go install ./cmd/gorisk
+        echo "$(go env GOPATH)/bin" >> $GITHUB_PATH
 
     - name: Run gorisk scan
       id: scan
