@@ -7,13 +7,25 @@
   "allow_exceptions": [
     {
       "package": "github.com/1homsi/gorisk",
-      "taint": ["env→exec", "fs:read→exec", "fs:read→network", "network→fs:write", "env→fs:write"],
+      "taint": [
+        "env→exec",
+        "fs:read→exec",
+        "fs:read→network",
+        "network→fs:write",
+        "env→fs:write"
+      ],
       "justification": "Gorisk CLI tool legitimately uses git operations (exec), reads project files, and makes API calls for health/CVE checks. All inputs are from trusted sources (local filesystem, GitHub/OSV APIs).",
       "expires": "2030-08-08"
     },
     {
       "package": "golang.org/x/tools",
-      "taint": ["env→exec", "fs:read→exec", "fs:read→unsafe", "env→crypto", "env→fs:write"],
+      "taint": [
+        "env→exec",
+        "fs:read→exec",
+        "fs:read→unsafe",
+        "env→crypto",
+        "env→fs:write"
+      ],
       "justification": "Go tools package used for AST analysis and package loading. Exec calls are for go command invocations with controlled inputs. Unsafe operations are for AST manipulation, crypto for build tooling.",
       "expires": "2030-08-08"
     }
@@ -45,6 +57,14 @@
     "github.com/1homsi/gorisk/internal/prdiff",
     "github.com/1homsi/gorisk/internal/reachability",
     "github.com/1homsi/gorisk/internal/adapters/go",
-    "github.com/1homsi/gorisk/internal/adapters/node"
+    "github.com/1homsi/gorisk/internal/adapters/node",
+    "golang.org/x/tools/go/gcexportdata",
+    "golang.org/x/tools/go/internal/cgo",
+    "golang.org/x/tools/go/packages",
+    "golang.org/x/tools/go/ssa",
+    "golang.org/x/tools/internal/event/label",
+    "golang.org/x/tools/internal/gcimporter",
+    "golang.org/x/tools/internal/gocommand",
+    "golang.org/x/tools/internal/typesinternal"
   ]
 }
