@@ -41,6 +41,7 @@
     "github.com/1homsi/gorisk/internal/license",
     "github.com/1homsi/gorisk/internal/prdiff",
     "github.com/1homsi/gorisk/internal/reachability",
+    "github.com/1homsi/gorisk/internal/adapters/go",
     "github.com/1homsi/gorisk/internal/adapters/node"
   ]
 }
