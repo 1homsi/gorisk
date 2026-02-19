@@ -50,7 +50,7 @@ jobs:
   report:
     name: Post PR Comment
     needs: [build, scan]
-    if: always()
+    if: always() && needs.build.result != 'cancelled' && needs.scan.result != 'cancelled'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -74,10 +74,4 @@ jobs:
           printf '### gorisk CI — %s\n\n| Check | Result |\n|-------|--------|\n| Build & Test | %s `%s` |\n| Gorisk Self-Scan | %s `%s` |\n\n_Commit: `%s`_\n' \
             "$SUMMARY" "$BUILD_ICON" "$BUILD_RESULT" "$SCAN_ICON" "$SCAN_RESULT" "$SHORT_SHA" \
             > /tmp/comment.md
-          EXISTING_ID=$(gh api "repos/$REPO/issues/$PR_NUMBER/comments" \
-            --jq '[.[] | select(.user.login == "github-actions[bot]") | select(.body | startswith("### gorisk CI")) | .id] | first' 2>/dev/null || true)
-          if [ -n "$EXISTING_ID" ] && [ "$EXISTING_ID" != "null" ]; then
-            gh api "repos/$REPO/issues/comments/$EXISTING_ID" -X PATCH -f body="$(cat /tmp/comment.md)"
-          else
-            gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file /tmp/comment.md
-          fi
+          gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file /tmp/comment.md

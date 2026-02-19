@@ -12,12 +12,18 @@ import (
 	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/health"
+	"github.com/1homsi/gorisk/internal/priority"
 	"github.com/1homsi/gorisk/internal/report"
+	"github.com/1homsi/gorisk/internal/taint"
 )
 
 type PolicyException struct {
-	Package      string   `json:"package"`
-	Capabilities []string `json:"capabilities"`
+	Package       string   `json:"package"`
+	Capabilities  []string `json:"capabilities"`
+	Taint         []string `json:"taint"`         // e.g. ["network→exec", "env→exec"]
+	Expires       string   `json:"expires"`       // ISO 8601 date "2026-06-01"
+	Justification string   `json:"justification"` // why this exception exists
+	Ticket        string   `json:"ticket"`        // optional ticket reference
 }
 
 type policy struct {
@@ -30,6 +36,127 @@ type policy struct {
 	AllowExceptions  []PolicyException `json:"allow_exceptions"`
 	MaxDepDepth      int               `json:"max_dep_depth"`
 	ExcludePackages  []string          `json:"exclude_packages"`
+}
+
+type exceptionStats struct {
+	Applied         int
+	Expired         int
+	MissingJustify  int
+	TaintSuppressed int
+}
+
+// buildExceptions processes policy exceptions with validation.
+// Returns:
+//   - exceptions: pkg → capability → bool (for capability exceptions)
+//   - taintExceptions: pkg → "source→sink" → bool (for taint exceptions)
+//   - stats: exception statistics for reporting
+func buildExceptions(allowExceptions []PolicyException) (
+	map[string]map[string]bool,
+	map[string]map[string]bool,
+	exceptionStats,
+) {
+	now := time.Now()
+	exceptions := make(map[string]map[string]bool)
+	taintExceptions := make(map[string]map[string]bool)
+	var stats exceptionStats
+
+	for _, ex := range allowExceptions {
+		// Check expiry
+		expired := false
+		if ex.Expires != "" {
+			expiryDate, err := time.Parse("2006-01-02", ex.Expires)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "[WARN] exception for %s has invalid expiry date %q\n", ex.Package, ex.Expires)
+				continue
+			}
+			if now.After(expiryDate) {
+				fmt.Fprintf(os.Stderr, "[WARN] exception for %s expired on %s\n", ex.Package, ex.Expires)
+				stats.Expired++
+				expired = true
+			}
+		}
+
+		// Check justification
+		if ex.Justification == "" && ex.Ticket == "" {
+			fmt.Fprintf(os.Stderr, "[WARN] exception for %s has no justification\n", ex.Package)
+			stats.MissingJustify++
+		}
+
+		// Don't apply expired exceptions
+		if expired {
+			continue
+		}
+
+		// Track if this exception was applied
+		applied := false
+
+		// Add capability exceptions
+		if len(ex.Capabilities) > 0 {
+			caps := make(map[string]bool)
+			for _, c := range ex.Capabilities {
+				caps[strings.ToLower(c)] = true
+			}
+			exceptions[ex.Package] = caps
+			applied = true
+		}
+
+		// Add taint exceptions
+		if len(ex.Taint) > 0 {
+			taints := make(map[string]bool)
+			for _, t := range ex.Taint {
+				taints[t] = true
+			}
+			taintExceptions[ex.Package] = taints
+			stats.TaintSuppressed += len(ex.Taint)
+			applied = true
+		}
+
+		if applied {
+			stats.Applied++
+		}
+	}
+
+	return exceptions, taintExceptions, stats
+}
+
+// filterTaintFindings removes taint findings that are suppressed by policy exceptions.
+func filterTaintFindings(findings []taint.TaintFinding, taintExceptions map[string]map[string]bool) []taint.TaintFinding {
+	if len(taintExceptions) == 0 {
+		return findings
+	}
+
+	filtered := make([]taint.TaintFinding, 0, len(findings))
+	for _, f := range findings {
+		// Check if this package has taint exceptions
+		pkgExceptions, ok := taintExceptions[f.Package]
+		if !ok {
+			filtered = append(filtered, f)
+			continue
+		}
+
+		// Build the source→sink key
+		key := f.Source + "→" + f.Sink
+		if !pkgExceptions[key] {
+			filtered = append(filtered, f)
+		}
+	}
+
+	return filtered
+}
+
+// writeExceptionSummary outputs a summary of policy exceptions applied.
+func writeExceptionSummary(w *os.File, stats exceptionStats) {
+	fmt.Fprintf(w, "=== Policy Exceptions ===\n")
+	fmt.Fprintf(w, "Applied: %d\n", stats.Applied)
+	if stats.TaintSuppressed > 0 {
+		fmt.Fprintf(w, "Taint flows suppressed: %d\n", stats.TaintSuppressed)
+	}
+	if stats.Expired > 0 {
+		fmt.Fprintf(w, "Expired (not applied): %d\n", stats.Expired)
+	}
+	if stats.MissingJustify > 0 {
+		fmt.Fprintf(w, "Missing justification: %d\n", stats.MissingJustify)
+	}
 }
 
 func Run(args []string) int {
@@ -83,14 +210,8 @@ func Run(args []string) int {
 		excluded[pkg] = true
 	}
 
-	exceptions := make(map[string]map[string]bool)
-	for _, ex := range p.AllowExceptions {
-		caps := make(map[string]bool)
-		for _, c := range ex.Capabilities {
-			caps[strings.ToLower(c)] = true
-		}
-		exceptions[ex.Package] = caps
-	}
+	// Build exceptions with validation
+	exceptions, taintExceptions, exceptionStats := buildExceptions(p.AllowExceptions)
 
 	deniedCaps := make(map[string]bool)
 	for _, c := range p.DenyCapabilities {
@@ -151,14 +272,32 @@ func Run(args []string) int {
 	healthReports, healthTiming := health.ScoreAll(mods)
 	healthDur := time.Since(t2)
 
+	taintFindings := taint.Analyze(g.Packages)
+
+	// Filter taint findings based on exceptions
+	filteredTaint := filterTaintFindings(taintFindings, taintExceptions)
+
 	sr := report.ScanReport{
 		GraphChecksum: g.Checksum(),
 		Capabilities:  capReports,
 		Health:        healthReports,
+		TaintFindings: filteredTaint,
 		Passed:        true,
 	}
 
 	failLevel := capability.RiskValue(*failOn)
+
+	// Build module→CVE count map for composite scoring
+	moduleCVEs := make(map[string]int)
+	for _, hr := range healthReports {
+		moduleCVEs[hr.Module] = hr.CVECount
+	}
+
+	// Build package→taint findings map for composite scoring
+	pkgTaints := make(map[string][]taint.TaintFinding)
+	for _, tf := range filteredTaint {
+		pkgTaints[tf.Package] = append(pkgTaints[tf.Package], tf)
+	}
 
 	for _, cr := range capReports {
 		if excluded[cr.Package] {
@@ -169,9 +308,22 @@ func Run(args []string) int {
 			continue
 		}
 
-		if capability.RiskValue(cr.RiskLevel) >= failLevel {
+		// Compute composite score for this package
+		cveCount := 0
+		if pkg.Module != nil {
+			cveCount = moduleCVEs[pkg.Module.Path]
+		}
+		compositeScore := priority.Compute(
+			cr.Capabilities,
+			nil, // reachability unknown for now
+			cveCount,
+			pkgTaints[cr.Package],
+		)
+
+		// Use composite score level for fail evaluation
+		if capability.RiskValue(compositeScore.Level) >= failLevel {
 			sr.Passed = false
-			sr.FailReason = fmt.Sprintf("package %s has %s risk capabilities", cr.Package, cr.RiskLevel)
+			sr.FailReason = fmt.Sprintf("package %s has %s composite risk (score: %.1f)", cr.Package, compositeScore.Level, compositeScore.Composite)
 			break
 		}
 
@@ -216,6 +368,11 @@ func Run(args []string) int {
 	default:
 		fmt.Fprintf(os.Stdout, "graph checksum: %s\n\n", sr.GraphChecksum)
 		report.WriteScan(os.Stdout, sr)
+		// Print exception summary if any exceptions were configured
+		if exceptionStats.Applied > 0 || exceptionStats.Expired > 0 || exceptionStats.MissingJustify > 0 {
+			fmt.Fprintln(os.Stdout)
+			writeExceptionSummary(os.Stdout, exceptionStats)
+		}
 	}
 	outDur := time.Since(t3)
 

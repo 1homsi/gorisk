@@ -73,7 +73,7 @@ func DetectFile(fpath string, fset *token.FileSet) (capability.CapabilitySet, er
 				Line:       pos.Line,
 				Context:    pattern,
 				Via:        "callSite",
-				Confidence: 0.60,
+				Confidence: 0.75,
 			})
 		}
 		return true
@@ -84,6 +84,8 @@ func DetectFile(fpath string, fset *token.FileSet) (capability.CapabilitySet, er
 
 // DetectPackage runs DetectFile over all Go files in a package directory,
 // merging capabilities and evidence from each file.
+// It also runs per-function detection and intra-package propagation to surface
+// transitive capabilities that flow through internal call chains.
 func DetectPackage(dir string, goFiles []string) (capability.CapabilitySet, error) {
 	fset := token.NewFileSet()
 	var cs capability.CapabilitySet
@@ -95,5 +97,14 @@ func DetectPackage(dir string, goFiles []string) (capability.CapabilitySet, erro
 		}
 		cs.MergeWithEvidence(fileCaps)
 	}
+
+	// Run per-function detection and propagate transitive capabilities.
+	if funcs, calls, err := DetectFunctions(dir, goFiles); err == nil {
+		propagated := PropagateWithinPackage(funcs, calls)
+		for _, fc := range propagated {
+			cs.MergeWithEvidence(fc.TransitiveCaps)
+		}
+	}
+
 	return cs, nil
 }

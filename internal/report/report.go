@@ -1,6 +1,9 @@
 package report
 
-import "github.com/1homsi/gorisk/internal/capability"
+import (
+	"github.com/1homsi/gorisk/internal/capability"
+	"github.com/1homsi/gorisk/internal/taint"
+)
 
 type CapabilityReport struct {
 	Package      string
@@ -49,6 +52,7 @@ type ScanReport struct {
 	GraphChecksum string `json:"graph_checksum,omitempty"`
 	Capabilities  []CapabilityReport
 	Health        []HealthReport
+	TaintFindings []taint.TaintFinding `json:"taint_findings,omitempty"`
 	Passed        bool
 	FailReason    string
 }

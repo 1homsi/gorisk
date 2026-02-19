@@ -39,7 +39,11 @@ func Detect(dir string) capability.CapabilitySet {
 		}
 		switch strings.ToLower(filepath.Ext(path)) {
 		case ".js", ".ts", ".tsx", ".mjs", ".cjs":
-			scanFile(path, &caps)
+			if astCaps, err := DetectFileAST(path); err == nil {
+				caps.MergeWithEvidence(astCaps)
+			} else {
+				scanFile(path, &caps)
+			}
 		}
 		return nil
 	})

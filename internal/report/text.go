@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"io"
 	"strings"
+
+	"github.com/1homsi/gorisk/internal/taint"
 )
 
 const (
@@ -229,11 +231,65 @@ func WriteImpact(w io.Writer, r ImpactReport) {
 	}
 }
 
+// WriteTaintFindings prints the taint flow findings section.
+// Rows are deduplicated by (module, source, sink) so each unique flow appears once.
+func WriteTaintFindings(w io.Writer, findings []taint.TaintFinding) {
+	if len(findings) == 0 {
+		return
+	}
+
+	// Deduplicate by (module, source, sink) keeping the first occurrence (highest risk first).
+	type key struct{ module, source, sink string }
+	seen := make(map[key]bool, len(findings))
+	deduped := findings[:0:0]
+	for _, f := range findings {
+		k := key{f.Module, f.Source, f.Sink}
+		if !seen[k] {
+			seen[k] = true
+			deduped = append(deduped, f)
+		}
+	}
+
+	fmt.Fprintf(w, "%s%s=== Taint Flows ===%s\n\n", colorBold, colorCyan, colorReset)
+
+	modW := len("MODULE")
+	for _, f := range deduped {
+		if l := len(f.Module); l > modW {
+			modW = l
+		}
+	}
+	const maxMod = 40
+	if modW > maxMod {
+		modW = maxMod
+	}
+
+	for _, f := range deduped {
+		color := riskColor(f.Risk)
+		mod := f.Module
+		if len(mod) > modW {
+			mod = mod[:modW-3] + "..."
+		}
+		flow := f.Source + " → " + f.Sink
+		confStr := ""
+		if f.Confidence > 0 {
+			confStr = fmt.Sprintf(" [conf: %.2f]", f.Confidence)
+		}
+		fmt.Fprintf(w, "  %s%-6s%s  %-*s  %-18s  %s%s\n",
+			color, f.Risk, colorReset,
+			modW, mod,
+			flow,
+			f.Note,
+			confStr)
+	}
+	fmt.Fprintln(w)
+}
+
 func WriteScan(w io.Writer, r ScanReport) {
 	WriteCapabilities(w, r.Capabilities)
 	fmt.Fprintln(w)
 	WriteHealth(w, r.Health)
 	fmt.Fprintln(w)
+	WriteTaintFindings(w, r.TaintFindings)
 
 	if r.Passed {
 		fmt.Fprintf(w, "%s%s✓ PASSED%s\n", colorBold, colorGreen, colorReset)
