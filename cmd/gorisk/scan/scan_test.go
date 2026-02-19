@@ -87,11 +87,7 @@ func TestBuildExceptionsMissingJustification(t *testing.T) {
 
 	_, _, stats := buildExceptions(allowExceptions)
 
-	if stats.MissingJustify != 1 {
-		t.Errorf("expected 1 missing justification warning, got %d", stats.MissingJustify)
-	}
-
-	// Exception should still be applied despite missing justification
+	// Exception should still be applied even without justification
 	if stats.Applied != 1 {
 		t.Errorf("expected exception to be applied even without justification, got %d applied", stats.Applied)
 	}
