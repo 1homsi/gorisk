@@ -22,6 +22,30 @@ const (
 	CapPlugin  Capability = "plugin"
 )
 
+// CapabilityRole classifies capabilities by their role in taint analysis.
+type CapabilityRole int
+
+const (
+	RoleSource    CapabilityRole = iota // env, network, fs:read
+	RoleSink                            // exec, unsafe, fs:write, plugin
+	RoleSanitizer                       // crypto
+	RoleNeutral                         // reflect
+)
+
+// ClassifyCapability returns the taint analysis role for a capability.
+func ClassifyCapability(cap Capability) CapabilityRole {
+	switch cap {
+	case CapEnv, CapNetwork, CapFSRead:
+		return RoleSource
+	case CapExec, CapUnsafe, CapFSWrite, CapPlugin:
+		return RoleSink
+	case CapCrypto:
+		return RoleSanitizer
+	default:
+		return RoleNeutral
+	}
+}
+
 var capWeights = map[Capability]int{
 	CapFSRead:  5,
 	CapFSWrite: 10,
