@@ -20,6 +20,9 @@
   ],
   "max_dep_depth": 0,
   "exclude_packages": [
+    "golang.org/x/net",
+    "golang.org/x/sys",
+    "gopkg.in/yaml.v3",
     "github.com/1homsi/gorisk/cmd/gorisk",
     "github.com/1homsi/gorisk/cmd/gorisk/capabilities",
     "github.com/1homsi/gorisk/cmd/gorisk/diff",
