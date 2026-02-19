@@ -1,78 +1,58 @@
 package interproc
 
 import (
-	"sort"
-
 	"github.com/1homsi/gorisk/internal/ir"
 )
 
-// BuildCSCallGraph constructs a k-CFA call graph from a base IRGraph.
-// For k=1, context is the immediate caller. For k=0, all contexts are merged.
+// BuildCSCallGraph constructs a k-CFA call graph from an IRGraph.
+// k=0: context-insensitive (all calls merge)
+// k=1: caller-sensitive (distinguish by immediate caller)
+// k>1: not yet implemented
 func BuildCSCallGraph(irGraph ir.IRGraph, k int) *ir.CSCallGraph {
-	Debugf("[context] Building k=%d CFA call graph from %d functions", k, len(irGraph.Functions))
-	cg := ir.NewCSCallGraph()
+	Debugf("[context] Building k=%d call graph from IR (%d functions, %d edges)",
+		k, len(irGraph.Functions), len(irGraph.Calls))
 
-	// Build a map of caller → callees from IRGraph
+	cg := &ir.CSCallGraph{
+		Nodes:        make(map[string]ir.ContextNode),
+		Edges:        make(map[string][]ir.ContextNode),
+		ReverseEdges: make(map[string][]ir.ContextNode),
+		Summaries:    make(map[string]ir.FunctionSummary),
+		SCCs:         make(map[int]*ir.SCC),
+		NodeToSCC:    make(map[string]int),
+	}
+
+	// Build caller → callees map for BFS traversal
 	callerToCallees := make(map[string][]ir.CallEdge)
 	for _, edge := range irGraph.Calls {
-		caller := edge.Caller.String()
-		callerToCallees[caller] = append(callerToCallees[caller], edge)
+		callerKey := edge.Caller.String()
+		callerToCallees[callerKey] = append(callerToCallees[callerKey], edge)
 	}
 
-	// Find entry points (functions with no callers)
-	allCallees := make(map[string]bool)
-	for _, edges := range callerToCallees {
-		for _, edge := range edges {
-			allCallees[edge.Callee.String()] = true
-		}
-	}
+	// BFS from all entry points (functions with no callers or explicit entry functions)
+	entryFunctions := findEntryFunctions(irGraph, callerToCallees)
+	Debugf("[context] Found %d entry functions", len(entryFunctions))
 
-	var entryPoints []ir.Symbol
-	for funcKey, funcCaps := range irGraph.Functions {
-		// Entry point if it's not called by anyone, or if it's a common entry like main/init
-		isEntry := !allCallees[funcKey]
-		isMain := funcCaps.Symbol.Name == "main" || funcCaps.Symbol.Name == "init"
-
-		if isEntry || isMain {
-			entryPoints = append(entryPoints, funcCaps.Symbol)
-		}
-	}
-
-	// Sort entry points for determinism
-	sort.Slice(entryPoints, func(i, j int) bool {
-		return entryPoints[i].String() < entryPoints[j].String()
-	})
-
-	// If no entry points found, use all functions
-	if len(entryPoints) == 0 {
-		for _, funcCaps := range irGraph.Functions {
-			entryPoints = append(entryPoints, funcCaps.Symbol)
-		}
-		sort.Slice(entryPoints, func(i, j int) bool {
-			return entryPoints[i].String() < entryPoints[j].String()
-		})
-	}
-
-	// BFS traversal with context tracking
+	// Worklist: (function, context)
 	type workItem struct {
 		function ir.Symbol
 		context  ir.Context
 	}
 
-	queue := make([]workItem, 0)
-	visited := make(map[string]bool)
-
-	// Initialize queue with entry points (empty context)
-	for _, entry := range entryPoints {
-		queue = append(queue, workItem{
-			function: entry,
+	worklist := make([]workItem, 0, len(entryFunctions))
+	for _, fn := range entryFunctions {
+		worklist = append(worklist, workItem{
+			function: fn,
 			context:  ir.Context{}, // Empty context for entry points
 		})
 	}
 
-	for len(queue) > 0 {
-		item := queue[0]
-		queue = queue[1:]
+	visited := make(map[string]bool)
+	nodeCount := 0
+
+	for len(worklist) > 0 {
+		// Pop from worklist
+		item := worklist[0]
+		worklist = worklist[1:]
 
 		// Create context node
 		node := ir.ContextNode{
@@ -81,21 +61,22 @@ func BuildCSCallGraph(irGraph ir.IRGraph, k int) *ir.CSCallGraph {
 		}
 		nodeKey := node.String()
 
-		// Skip if already visited (for k=0 or when same context is reached)
+		// Skip if already visited
 		if visited[nodeKey] {
 			continue
 		}
 		visited[nodeKey] = true
+		nodeCount++
 
-		// Add node to call graph
+		// Add to graph
 		cg.Nodes[nodeKey] = node
 
-		// Initialize summary with direct capabilities from IRGraph
-		if funcCaps, ok := irGraph.Functions[item.function.String()]; ok {
+		// Initialize summary with direct capabilities
+		funcCaps, ok := irGraph.Functions[item.function.String()]
+		if ok {
 			summary := ir.FunctionSummary{
 				Node:       node,
 				Confidence: 1.0,
-				Depth:      0,
 			}
 			summary.Effects.MergeWithEvidence(funcCaps.DirectCaps)
 			ClassifySummary(&summary)
@@ -124,15 +105,13 @@ func BuildCSCallGraph(irGraph ir.IRGraph, k int) *ir.CSCallGraph {
 			}
 			calleeKey := calleeNode.String()
 
-			// Add edge: node → calleeNode
+			// Add edge
 			cg.Edges[nodeKey] = append(cg.Edges[nodeKey], calleeNode)
-
-			// Add reverse edge: calleeNode → node
 			cg.ReverseEdges[calleeKey] = append(cg.ReverseEdges[calleeKey], node)
 
 			// Enqueue callee if not visited
 			if !visited[calleeKey] {
-				queue = append(queue, workItem{
+				worklist = append(worklist, workItem{
 					function: edge.Callee,
 					context:  newContext,
 				})
@@ -140,34 +119,60 @@ func BuildCSCallGraph(irGraph ir.IRGraph, k int) *ir.CSCallGraph {
 		}
 	}
 
-	Infof("[context] Built call graph: %d context-sensitive nodes, %d edges", len(cg.Nodes), countEdges(cg))
+	Infof("[context] Built call graph: %d nodes, %d edges", nodeCount, len(cg.Edges))
 	return cg
 }
 
-// countEdges counts total edges in the call graph
-func countEdges(cg *ir.CSCallGraph) int {
-	total := 0
-	for _, edges := range cg.Edges {
-		total += len(edges)
-	}
-	return total
-}
-
-// ConsolidateIR builds an IRGraph from package-level capabilities and call edges.
-// This is a helper for existing code that uses per-package FunctionCaps maps.
-func ConsolidateIR(pkgCaps map[string]map[string]ir.FunctionCaps, pkgEdges map[string][]ir.CallEdge) ir.IRGraph {
-	irGraph := ir.IRGraph{
-		Functions: make(map[string]ir.FunctionCaps),
-	}
-
-	// Collect all function capabilities
-	for _, funcMap := range pkgCaps {
-		for funcKey, funcCaps := range funcMap {
-			irGraph.Functions[funcKey] = funcCaps
+// findEntryFunctions identifies functions that should be entry points.
+func findEntryFunctions(irGraph ir.IRGraph, callerToCallees map[string][]ir.CallEdge) []ir.Symbol {
+	// Find all functions that are callees
+	isCallee := make(map[string]bool)
+	for _, edges := range callerToCallees {
+		for _, edge := range edges {
+			isCallee[edge.Callee.String()] = true
 		}
 	}
 
-	// Collect all call edges
+	// Entry functions are those that are never called (or explicitly marked)
+	var entries []ir.Symbol
+	for fnKey, funcCaps := range irGraph.Functions {
+		// If this function has callees but is not itself a callee, it's an entry
+		if len(callerToCallees[fnKey]) > 0 && !isCallee[fnKey] {
+			entries = append(entries, funcCaps.Symbol)
+			continue
+		}
+
+		// Also include functions named "main" or "init"
+		if funcCaps.Symbol.Name == "main" || funcCaps.Symbol.Name == "init" {
+			entries = append(entries, funcCaps.Symbol)
+		}
+	}
+
+	// If no entries found, include all functions (for libraries)
+	if len(entries) == 0 {
+		for _, funcCaps := range irGraph.Functions {
+			entries = append(entries, funcCaps.Symbol)
+		}
+	}
+
+	return entries
+}
+
+// ConsolidateIR converts package-level IR into a unified IRGraph.
+func ConsolidateIR(pkgCaps map[string]map[string]ir.FunctionCaps, pkgEdges map[string][]ir.CallEdge) ir.IRGraph {
+	irGraph := ir.IRGraph{
+		Functions: make(map[string]ir.FunctionCaps),
+		Calls:     []ir.CallEdge{},
+	}
+
+	// Merge all functions
+	for _, funcMap := range pkgCaps {
+		for fnKey, funcCaps := range funcMap {
+			irGraph.Functions[fnKey] = funcCaps
+		}
+	}
+
+	// Merge all call edges
 	for _, edges := range pkgEdges {
 		irGraph.Calls = append(irGraph.Calls, edges...)
 	}

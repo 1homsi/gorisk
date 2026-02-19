@@ -24,6 +24,11 @@ type TaintFinding struct {
 	Note          string                `json:"note"`
 	Confidence    float64               `json:"confidence"`               // min(source_conf, sink_conf)
 	EvidenceChain []TaintEvidence       `json:"evidence_chain,omitempty"` // [source_evidence, sink_evidence]
+
+	// Interprocedural fields (optional, populated by interprocedural analysis)
+	SourceFunc string   `json:"source_func,omitempty"` // Function where source originates
+	SinkFunc   string   `json:"sink_func,omitempty"`   // Function where sink occurs
+	CallStack  []string `json:"call_stack,omitempty"`  // Call path from source to sink
 }
 
 type taintRule struct {

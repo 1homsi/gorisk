@@ -12,6 +12,7 @@ import (
 	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/health"
+	"github.com/1homsi/gorisk/internal/interproc"
 	"github.com/1homsi/gorisk/internal/priority"
 	"github.com/1homsi/gorisk/internal/report"
 	"github.com/1homsi/gorisk/internal/taint"
@@ -167,6 +168,7 @@ func Run(args []string) int {
 	policyFile := fs.String("policy", "", "policy JSON file")
 	lang := fs.String("lang", "auto", "language analyzer: auto|go|node")
 	timings := fs.Bool("timings", false, "print per-phase timing breakdown after output")
+	verbose := fs.Bool("verbose", false, "enable verbose debug logging")
 	fs.Parse(args)
 
 	dir, err := os.Getwd()
@@ -222,6 +224,12 @@ func Run(args []string) int {
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		return 2
+	}
+
+	// Enable verbose logging if requested
+	if *verbose {
+		interproc.SetVerbose(true)
+		taint.SetVerbose(true)
 	}
 
 	// Phase: load graph

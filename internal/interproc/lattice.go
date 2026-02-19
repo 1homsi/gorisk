@@ -5,30 +5,56 @@ import (
 	"github.com/1homsi/gorisk/internal/ir"
 )
 
-// Hop multipliers for confidence decay based on call depth
-var hopMultipliers = map[int]float64{
-	0: 1.0,  // Direct capability
-	1: 0.70, // One hop
-	2: 0.55, // Two hops
-	3: 0.40, // Three or more hops
-}
+// ClassifySummary categorizes capabilities into sources, sinks, and sanitizers.
+func ClassifySummary(summary *ir.FunctionSummary) {
+	for _, cap := range summary.Effects.List() {
+		role := capability.ClassifyCapability(cap)
 
-// getHopMultiplier returns the confidence multiplier for a given hop count.
-func getHopMultiplier(hops int) float64 {
-	if m, ok := hopMultipliers[hops]; ok {
-		return m
+		// Get evidence for this capability (use first evidence if available)
+		var evidence capability.CapabilityEvidence
+		if evs := summary.Effects.Evidence[cap]; len(evs) > 0 {
+			evidence = evs[0]
+		}
+
+		switch role {
+		case capability.RoleSource:
+			summary.Sources.AddWithEvidence(cap, evidence)
+		case capability.RoleSink:
+			summary.Sinks.AddWithEvidence(cap, evidence)
+		case capability.RoleSanitizer:
+			summary.Sanitizers.AddWithEvidence(cap, evidence)
+		}
 	}
-	return hopMultipliers[3] // Use 3+ multiplier for anything beyond
 }
 
-// JoinSummaries combines two function summaries using lattice join operations.
-// This implements the monotonic merge required for fixpoint convergence.
+// getHopMultiplier returns the confidence multiplier for a given hop depth.
+// Hop 0 (direct): 1.00
+// Hop 1: 0.70
+// Hop 2: 0.55
+// Hop 3+: 0.40
+func getHopMultiplier(depth int) float64 {
+	switch depth {
+	case 0:
+		return 1.00
+	case 1:
+		return 0.70
+	case 2:
+		return 0.55
+	default: // 3+
+		return 0.40
+	}
+}
+
+// JoinSummaries merges two summaries (for SCC collapse or merging contexts).
 func JoinSummaries(a, b ir.FunctionSummary) ir.FunctionSummary {
 	result := ir.FunctionSummary{
-		Node: a.Node, // Keep the node from the first summary
+		Node: a.Node, // Use first node as representative
 	}
 
-	// Union of all capability sets
+	// Merge capability sets
+	result.Effects.MergeWithEvidence(a.Effects)
+	result.Effects.MergeWithEvidence(b.Effects)
+
 	result.Sources.MergeWithEvidence(a.Sources)
 	result.Sources.MergeWithEvidence(b.Sources)
 
@@ -38,48 +64,32 @@ func JoinSummaries(a, b ir.FunctionSummary) ir.FunctionSummary {
 	result.Sanitizers.MergeWithEvidence(a.Sanitizers)
 	result.Sanitizers.MergeWithEvidence(b.Sanitizers)
 
-	result.Effects.MergeWithEvidence(a.Effects)
-	result.Effects.MergeWithEvidence(b.Effects)
-
 	result.Transitive.MergeWithEvidence(a.Transitive)
 	result.Transitive.MergeWithEvidence(b.Transitive)
 
-	// Maximum depth
+	// Take maximum depth
 	if a.Depth > b.Depth {
 		result.Depth = a.Depth
 	} else {
 		result.Depth = b.Depth
 	}
 
-	// Minimum confidence (most conservative)
-	if a.Confidence > 0 && b.Confidence > 0 {
-		if a.Confidence < b.Confidence {
-			result.Confidence = a.Confidence
-		} else {
-			result.Confidence = b.Confidence
-		}
-	} else if a.Confidence > 0 {
+	// Take minimum confidence (conservative)
+	if a.Confidence < b.Confidence {
 		result.Confidence = a.Confidence
 	} else {
 		result.Confidence = b.Confidence
 	}
 
-	// Combine call stacks
-	result.CallStack = append(append([]ir.CallEdge{}, a.CallStack...), b.CallStack...)
-
-	// Maximum iteration
-	if a.Iteration > b.Iteration {
-		result.Iteration = a.Iteration
-	} else {
-		result.Iteration = b.Iteration
-	}
-
 	return result
 }
 
-// SummariesEqual checks if two summaries are equivalent for convergence detection.
+// SummariesEqual checks if two summaries are equivalent (for fixpoint convergence).
 func SummariesEqual(a, b ir.FunctionSummary) bool {
-	// Check if capability sets are equal
+	// Check capability sets
+	if !capSetsEqual(a.Effects, b.Effects) {
+		return false
+	}
 	if !capSetsEqual(a.Sources, b.Sources) {
 		return false
 	}
@@ -89,14 +99,11 @@ func SummariesEqual(a, b ir.FunctionSummary) bool {
 	if !capSetsEqual(a.Sanitizers, b.Sanitizers) {
 		return false
 	}
-	if !capSetsEqual(a.Effects, b.Effects) {
-		return false
-	}
 	if !capSetsEqual(a.Transitive, b.Transitive) {
 		return false
 	}
 
-	// Check depth and confidence
+	// Check depth
 	if a.Depth != b.Depth {
 		return false
 	}
@@ -115,8 +122,9 @@ func capSetsEqual(a, b capability.CapabilitySet) bool {
 		return false
 	}
 
-	for i := range aList {
-		if aList[i] != bList[i] {
+	// Check each capability exists in both sets
+	for _, cap := range aList {
+		if !b.Has(cap) {
 			return false
 		}
 	}
@@ -130,37 +138,4 @@ func abs(x float64) float64 {
 		return -x
 	}
 	return x
-}
-
-// ClassifySummary populates the Sources, Sinks, and Sanitizers sets based on Effects.
-func ClassifySummary(summary *ir.FunctionSummary) {
-	for _, cap := range summary.Effects.List() {
-		role := capability.ClassifyCapability(cap)
-		switch role {
-		case capability.RoleSource:
-			if evs, ok := summary.Effects.Evidence[cap]; ok {
-				for _, ev := range evs {
-					summary.Sources.AddWithEvidence(cap, ev)
-				}
-			} else {
-				summary.Sources.Add(cap)
-			}
-		case capability.RoleSink:
-			if evs, ok := summary.Effects.Evidence[cap]; ok {
-				for _, ev := range evs {
-					summary.Sinks.AddWithEvidence(cap, ev)
-				}
-			} else {
-				summary.Sinks.Add(cap)
-			}
-		case capability.RoleSanitizer:
-			if evs, ok := summary.Effects.Evidence[cap]; ok {
-				for _, ev := range evs {
-					summary.Sanitizers.AddWithEvidence(cap, ev)
-				}
-			} else {
-				summary.Sanitizers.Add(cap)
-			}
-		}
-	}
 }
