@@ -1,0 +1,154 @@
+# Capability patterns for PHP
+#
+# Covers call-site function calls in .php files and well-known Composer package imports.
+# Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+#
+# To add a pattern: append an entry to imports or call_sites and open a PR.
+
+name: php
+
+# import_patterns: Composer package name → capabilities
+imports:
+  # HTTP clients / network
+  guzzlehttp/guzzle:          [network]
+  guzzlehttp/psr7:            [network]
+  symfony/http-client:        [network]
+  symfony/curl-http-client:   [network]
+  laminas/laminas-http:       [network]
+  illuminate/http:            [network]
+  nategood/httpful:           [network]
+  php-http/curl-client:       [network]
+  aws/aws-sdk-php:            [network, fs:read, fs:write]
+  google/cloud:               [network, fs:read, fs:write]
+  microsoft/microsoft-graph:  [network]
+  stripe/stripe-php:          [network]
+  paypal/paypal-php-sdk:      [network]
+  twilio/sdk:                 [network]
+
+  # Process execution
+  symfony/process:            [exec]
+  spatie/ssh:                 [exec, network]
+
+  # Filesystem
+  league/flysystem:           [fs:read, fs:write]
+  league/csv:                 [fs:read, fs:write]
+  spatie/image:               [fs:read, fs:write]
+  intervention/image:         [fs:read, fs:write]
+  illuminate/filesystem:      [fs:read, fs:write]
+
+  # Cryptography
+  firebase/php-jwt:           [crypto]
+  firebase/php-encryption:    [crypto]
+  paragonie/halite:           [crypto]
+  paragonie/sodium_compat:    [crypto]
+  defuse/php-encryption:      [crypto]
+  lcobucci/jwt:               [crypto]
+
+  # Runtime / reflection / unsafe
+  nikic/php-parser:           [reflect, plugin]
+  psy/psysh:                  [unsafe, exec]
+  symfony/var-dumper:         [reflect]
+
+  # Environment / config
+  vlucas/phpdotenv:           [env]
+  symfony/dotenv:             [env]
+  josegonzalez/dotenv:        [env]
+  illuminate/support:         [env]
+
+  # Plugin / dynamic loading
+  composer/composer:          [plugin, network, fs:read, fs:write]
+  composer/class-map-generator: [plugin, fs:read]
+  filp/whoops:                [reflect]
+
+# call_sites: substring patterns matched against each source line
+call_sites:
+  # Process execution
+  "exec(":              [exec]
+  "shell_exec(":        [exec]
+  "system(":            [exec]
+  "passthru(":          [exec]
+  "proc_open(":         [exec]
+  "popen(":             [exec]
+  "pcntl_exec(":        [exec]
+
+  # Code evaluation (unsafe)
+  "eval(":              [unsafe]
+  "create_function(":   [unsafe]
+  "assert(":            [unsafe]
+  "call_user_func(":    [unsafe, reflect]
+  "call_user_func_array(": [unsafe, reflect]
+  "preg_replace_callback(": [reflect]
+
+  # Network
+  "curl_init(":         [network]
+  "curl_exec(":         [network]
+  "fsockopen(":         [network]
+  "pfsockopen(":        [network]
+  "socket_create(":     [network]
+  "stream_socket_client(": [network]
+  "http_request(":      [network]
+
+  # Filesystem reads
+  "file_get_contents(": [fs:read, network]
+  "fopen(":             [fs:read]
+  "file(":              [fs:read]
+  "readfile(":          [fs:read]
+  "glob(":              [fs:read]
+  "opendir(":           [fs:read]
+  "scandir(":           [fs:read]
+  "is_file(":           [fs:read]
+  "is_dir(":            [fs:read]
+  "file_exists(":       [fs:read]
+  "realpath(":          [fs:read]
+  "pathinfo(":          [fs:read]
+
+  # Filesystem writes
+  "file_put_contents(": [fs:write]
+  "fwrite(":            [fs:write]
+  "fputs(":             [fs:write]
+  "unlink(":            [fs:write]
+  "rename(":            [fs:write]
+  "mkdir(":             [fs:write]
+  "rmdir(":             [fs:write]
+  "copy(":              [fs:write]
+  "move_uploaded_file(": [fs:write]
+  "touch(":             [fs:write]
+  "chmod(":             [fs:write]
+  "chown(":             [fs:write]
+  "symlink(":           [fs:write]
+
+  # Environment
+  "getenv(":            [env]
+  "putenv(":            [env]
+  "$_ENV":              [env]
+  "$_SERVER":           [env]
+
+  # Cryptography
+  "openssl_encrypt(":   [crypto]
+  "openssl_decrypt(":   [crypto]
+  "openssl_sign(":      [crypto]
+  "openssl_verify(":    [crypto]
+  "hash(":              [crypto]
+  "hmac(":              [crypto]
+  "hash_hmac(":         [crypto]
+  "password_hash(":     [crypto]
+  "password_verify(":   [crypto]
+  "sodium_crypto_":     [crypto]
+  "mcrypt_encrypt(":    [crypto]
+
+  # Reflection / introspection
+  "ReflectionClass(":   [reflect]
+  "ReflectionFunction(": [reflect]
+  "ReflectionMethod(":  [reflect]
+  "get_class(":         [reflect]
+  "get_object_vars(":   [reflect]
+  "get_class_methods(": [reflect]
+  "method_exists(":     [reflect]
+  "property_exists(":   [reflect]
+
+  # Dynamic loading
+  "dl(":                [plugin]
+  "class_alias(":       [plugin]
+  "spl_autoload_register(": [plugin]

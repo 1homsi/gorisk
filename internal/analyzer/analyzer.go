@@ -7,6 +7,7 @@ import (
 
 	goadapter "github.com/1homsi/gorisk/internal/adapters/go"
 	nodeadapter "github.com/1homsi/gorisk/internal/adapters/node"
+	phpadapter "github.com/1homsi/gorisk/internal/adapters/php"
 	"github.com/1homsi/gorisk/internal/graph"
 	"github.com/1homsi/gorisk/internal/prdiff"
 	"github.com/1homsi/gorisk/internal/reachability"
@@ -34,10 +35,16 @@ var registry = map[string]LangFeatures{
 		PRDiff:       prdiff.NodeDiffer{},
 		Reachability: reachability.NodeAnalyzer{},
 	},
+	"php": {
+		Upgrade:      upgrade.PHPUpgrader{},
+		CapDiff:      upgrade.PHPCapDiffer{},
+		PRDiff:       prdiff.PHPDiffer{},
+		Reachability: reachability.PHPAnalyzer{},
+	},
 }
 
 // FeaturesFor returns the feature implementations for the given language.
-// lang may be "auto", "go", or "node".
+// lang may be "auto", "go", "node", or "php".
 func FeaturesFor(lang, dir string) (LangFeatures, error) {
 	if lang == "auto" || lang == "" {
 		lang = detect(dir)
@@ -47,7 +54,7 @@ func FeaturesFor(lang, dir string) (LangFeatures, error) {
 	}
 	f, ok := registry[lang]
 	if !ok {
-		return LangFeatures{}, fmt.Errorf("unknown language %q; choose auto|go|node", lang)
+		return LangFeatures{}, fmt.Errorf("unknown language %q; choose auto|go|node|php", lang)
 	}
 	return f, nil
 }
@@ -59,9 +66,8 @@ type Analyzer interface {
 }
 
 // ForLang returns an Analyzer for the given language specifier.
-// lang may be "auto", "go", or "node".
-// "auto" detects from go.mod / package.json presence; if both exist, both
-// analyzers run and their graphs are merged.
+// lang may be "auto", "go", "node", or "php".
+// "auto" detects from go.mod / package.json / composer.json presence.
 func ForLang(lang, dir string) (Analyzer, error) {
 	if lang == "auto" {
 		lang = detect(dir)
@@ -71,16 +77,20 @@ func ForLang(lang, dir string) (Analyzer, error) {
 		return &goadapter.Adapter{}, nil
 	case "node":
 		return &nodeadapter.Adapter{}, nil
+	case "php":
+		return &phpadapter.Adapter{}, nil
 	case "multi":
 		return &multiAnalyzer{}, nil
 	default:
-		return nil, fmt.Errorf("unknown language %q; choose auto|go|node", lang)
+		return nil, fmt.Errorf("unknown language %q; choose auto|go|node|php", lang)
 	}
 }
 
 func detect(dir string) string {
 	hasGoMod := fileExists(filepath.Join(dir, "go.mod"))
 	hasPkgJSON := fileExists(filepath.Join(dir, "package.json"))
+	hasComposerJSON := fileExists(filepath.Join(dir, "composer.json"))
+	hasComposerLock := fileExists(filepath.Join(dir, "composer.lock"))
 	switch {
 	case hasGoMod && hasPkgJSON:
 		return "multi"
@@ -88,6 +98,8 @@ func detect(dir string) string {
 		return "go"
 	case hasPkgJSON:
 		return "node"
+	case hasComposerJSON || hasComposerLock:
+		return "php"
 	default:
 		return "go"
 	}
