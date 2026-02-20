@@ -2,6 +2,7 @@
 #
 # Covers call-site function calls in .php files and well-known Composer package imports.
 # Call-site patterns are matched as substrings of each source line.
+# Also covers Laravel facades (static method calls like Storage::, Http::, etc.)
 #
 # Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
 #
@@ -11,144 +12,427 @@ name: php
 
 # import_patterns: Composer package name → capabilities
 imports:
-  # HTTP clients / network
-  guzzlehttp/guzzle:          [network]
-  guzzlehttp/psr7:            [network]
-  symfony/http-client:        [network]
-  symfony/curl-http-client:   [network]
-  laminas/laminas-http:       [network]
-  illuminate/http:            [network]
-  nategood/httpful:           [network]
-  php-http/curl-client:       [network]
-  aws/aws-sdk-php:            [network, fs:read, fs:write]
-  google/cloud:               [network, fs:read, fs:write]
-  microsoft/microsoft-graph:  [network]
-  stripe/stripe-php:          [network]
-  paypal/paypal-php-sdk:      [network]
-  twilio/sdk:                 [network]
+  # ── HTTP clients / network ────────────────────────────────────────────────
+  guzzlehttp/guzzle:            [network]
+  guzzlehttp/psr7:              [network]
+  guzzlehttp/promises:          [network]
+  symfony/http-client:          [network]
+  symfony/curl-http-client:     [network]
+  laminas/laminas-http:         [network]
+  illuminate/http:              [network]
+  nategood/httpful:             [network]
+  php-http/curl-client:         [network]
+  php-http/guzzle7-adapter:     [network]
+  nyholm/psr7:                  [network]
+  zttp/zttp:                    [network]
+  rmccue/requests:              [network]
 
-  # Process execution
-  symfony/process:            [exec]
-  spatie/ssh:                 [exec, network]
+  # ── Cloud SDKs ────────────────────────────────────────────────────────────
+  aws/aws-sdk-php:              [network, fs:read, fs:write]
+  google/cloud:                 [network, fs:read, fs:write]
+  google/cloud-storage:         [network, fs:read, fs:write]
+  google/cloud-firestore:       [network]
+  google/cloud-bigquery:        [network]
+  microsoft/microsoft-graph:    [network]
+  azure/storage-blob:           [network, fs:read, fs:write]
 
-  # Filesystem
-  league/flysystem:           [fs:read, fs:write]
-  league/csv:                 [fs:read, fs:write]
-  spatie/image:               [fs:read, fs:write]
-  intervention/image:         [fs:read, fs:write]
-  illuminate/filesystem:      [fs:read, fs:write]
+  # ── Payment / messaging APIs ───────────────────────────────────────────────
+  stripe/stripe-php:            [network]
+  paypal/paypal-php-sdk:        [network]
+  braintree/braintree_php:      [network, crypto]
+  twilio/sdk:                   [network]
+  sendgrid/sendgrid:            [network]
+  mailchimp/marketing:          [network]
+  pusher/pusher-php-server:     [network]
+  beyondcode/laravel-websockets: [network]
+  predis/predis:                [network]
+  php-amqplib/php-amqplib:      [network]
 
-  # Cryptography
-  firebase/php-jwt:           [crypto]
-  firebase/php-encryption:    [crypto]
-  paragonie/halite:           [crypto]
-  paragonie/sodium_compat:    [crypto]
-  defuse/php-encryption:      [crypto]
-  lcobucci/jwt:               [crypto]
+  # ── Process execution ─────────────────────────────────────────────────────
+  symfony/process:              [exec]
+  spatie/ssh:                   [exec, network]
+  spatie/browsershot:           [exec, network]
+  knplabs/knp-snappy:           [exec, fs:write]
+  php-ffmpeg/php-ffmpeg:        [exec, fs:read, fs:write]
 
-  # Runtime / reflection / unsafe
-  nikic/php-parser:           [reflect, plugin]
-  psy/psysh:                  [unsafe, exec]
-  symfony/var-dumper:         [reflect]
+  # ── Filesystem ────────────────────────────────────────────────────────────
+  league/flysystem:             [fs:read, fs:write]
+  league/flysystem-aws-s3-v3:   [fs:read, fs:write, network]
+  league/csv:                   [fs:read, fs:write]
+  spatie/image:                 [fs:read, fs:write]
+  intervention/image:           [fs:read, fs:write]
+  illuminate/filesystem:        [fs:read, fs:write]
+  maatwebsite/excel:            [fs:read, fs:write]
+  phpoffice/phpspreadsheet:     [fs:read, fs:write]
+  phpoffice/phpword:            [fs:read, fs:write]
+  tecnickcom/tcpdf:             [fs:write]
+  dompdf/dompdf:                [fs:write, network]
+  barryvdh/laravel-dompdf:      [fs:write, network]
+  endroid/qr-code:              [fs:write]
 
-  # Environment / config
-  vlucas/phpdotenv:           [env]
-  symfony/dotenv:             [env]
-  josegonzalez/dotenv:        [env]
-  illuminate/support:         [env]
+  # ── Cryptography ──────────────────────────────────────────────────────────
+  firebase/php-jwt:             [crypto]
+  firebase/php-encryption:      [crypto]
+  paragonie/halite:             [crypto]
+  paragonie/sodium_compat:      [crypto]
+  defuse/php-encryption:        [crypto]
+  lcobucci/jwt:                 [crypto]
+  tymon/jwt-auth:               [crypto]
+  league/oauth2-server:         [crypto, network]
+  league/oauth2-client:         [crypto, network]
+  laravel/passport:             [crypto, network]
+  laravel/sanctum:              [crypto, network]
+  laravel/cashier:              [network, crypto]
+  laravel/socialite:            [network, crypto]
 
-  # Plugin / dynamic loading
-  composer/composer:          [plugin, network, fs:read, fs:write]
+  # ── Runtime / reflection / unsafe ─────────────────────────────────────────
+  nikic/php-parser:             [reflect, plugin]
+  psy/psysh:                    [unsafe, exec]
+  symfony/var-dumper:           [reflect]
+  barryvdh/laravel-debugbar:    [reflect]
+  filp/whoops:                  [reflect]
+  laravel/telescope:            [reflect, fs:write, network]
+  laravel/ide-helper:           [reflect, fs:write]
+
+  # ── Environment / config ──────────────────────────────────────────────────
+  vlucas/phpdotenv:             [env]
+  symfony/dotenv:               [env]
+  josegonzalez/dotenv:          [env]
+  illuminate/support:           [env]
+
+  # ── Laravel framework & ecosystem ─────────────────────────────────────────
+  laravel/framework:            [network, fs:read, fs:write, env, exec, crypto]
+  laravel/horizon:              [exec, network]
+  laravel/octane:               [exec, network]
+  laravel/dusk:                 [exec, network]
+  laravel/echo:                 [network]
+  laravel/pint:                 []
+  laravel/reverb:               [network]
+  laravel/pennant:              [fs:read]
+
+  # ── Spatie Laravel packages ───────────────────────────────────────────────
+  spatie/laravel-backup:        [fs:read, fs:write, exec, network]
+  spatie/laravel-medialibrary:  [fs:read, fs:write]
+  spatie/laravel-pdf:           [exec, fs:write]
+  spatie/laravel-permission:    [fs:read]
+  spatie/laravel-ray:           [network]
+  spatie/crawler:               [network, exec]
+  spatie/laravel-query-builder: []
+  spatie/laravel-activitylog:   [fs:write]
+
+  # ── Plugin / dynamic loading ──────────────────────────────────────────────
+  composer/composer:            [plugin, network, fs:read, fs:write]
   composer/class-map-generator: [plugin, fs:read]
-  filp/whoops:                [reflect]
+
+  # ── Email ─────────────────────────────────────────────────────────────────
+  phpmailer/phpmailer:          [network]
+  swiftmailer/swiftmailer:      [network]
+  symfony/mailer:               [network]
+  mailjet/mailjet-apiv3-php:    [network]
+
+  # ── Logging ───────────────────────────────────────────────────────────────
+  monolog/monolog:              [fs:write, network]
+  sentry/sentry:                [network]
+
+  # ── Database / ORM ────────────────────────────────────────────────────────
+  doctrine/orm:                 [network]
+  doctrine/dbal:                [network]
+  doctrine/migrations:          [network, fs:read]
+  illuminate/database:          [network]
+  cycle/orm:                    [network]
+  atlas/orm:                    [network]
+
+  # ── Misc ──────────────────────────────────────────────────────────────────
+  ramsey/uuid:                  [crypto]
+  ramsey/collection:            []
 
 # call_sites: substring patterns matched against each source line
 call_sites:
-  # Process execution
-  "exec(":              [exec]
-  "shell_exec(":        [exec]
-  "system(":            [exec]
-  "passthru(":          [exec]
-  "proc_open(":         [exec]
-  "popen(":             [exec]
-  "pcntl_exec(":        [exec]
+  # ── Process execution ─────────────────────────────────────────────────────
+  "exec(":                [exec]
+  "shell_exec(":          [exec]
+  "system(":              [exec]
+  "passthru(":            [exec]
+  "proc_open(":           [exec]
+  "popen(":               [exec]
+  "pcntl_exec(":          [exec]
+  "pcntl_fork(":          [exec]
+  "pcntl_waitpid(":       [exec]
 
-  # Code evaluation (unsafe)
-  "eval(":              [unsafe]
-  "create_function(":   [unsafe]
-  "assert(":            [unsafe]
-  "call_user_func(":    [unsafe, reflect]
+  # ── Code evaluation (unsafe) ──────────────────────────────────────────────
+  "eval(":                [unsafe]
+  "create_function(":     [unsafe]
+  "assert(":              [unsafe]
+  "call_user_func(":      [unsafe, reflect]
   "call_user_func_array(": [unsafe, reflect]
+  "unserialize(":         [unsafe]
+  "parse_str(":           [unsafe]
+  "extract(":             [unsafe]
   "preg_replace_callback(": [reflect]
+  "register_shutdown_function(": [unsafe]
+  "register_tick_function(":     [unsafe]
+  "ob_start(":            [unsafe]
 
-  # Network
-  "curl_init(":         [network]
-  "curl_exec(":         [network]
-  "fsockopen(":         [network]
-  "pfsockopen(":        [network]
-  "socket_create(":     [network]
-  "stream_socket_client(": [network]
-  "http_request(":      [network]
-
-  # Filesystem reads
-  "file_get_contents(": [fs:read, network]
-  "fopen(":             [fs:read]
-  "file(":              [fs:read]
-  "readfile(":          [fs:read]
-  "glob(":              [fs:read]
-  "opendir(":           [fs:read]
-  "scandir(":           [fs:read]
-  "is_file(":           [fs:read]
-  "is_dir(":            [fs:read]
-  "file_exists(":       [fs:read]
-  "realpath(":          [fs:read]
-  "pathinfo(":          [fs:read]
-
-  # Filesystem writes
-  "file_put_contents(": [fs:write]
-  "fwrite(":            [fs:write]
-  "fputs(":             [fs:write]
-  "unlink(":            [fs:write]
-  "rename(":            [fs:write]
-  "mkdir(":             [fs:write]
-  "rmdir(":             [fs:write]
-  "copy(":              [fs:write]
-  "move_uploaded_file(": [fs:write]
-  "touch(":             [fs:write]
-  "chmod(":             [fs:write]
-  "chown(":             [fs:write]
-  "symlink(":           [fs:write]
-
-  # Environment
-  "getenv(":            [env]
-  "putenv(":            [env]
-  "$_ENV":              [env]
-  "$_SERVER":           [env]
-
-  # Cryptography
-  "openssl_encrypt(":   [crypto]
-  "openssl_decrypt(":   [crypto]
-  "openssl_sign(":      [crypto]
-  "openssl_verify(":    [crypto]
-  "hash(":              [crypto]
-  "hmac(":              [crypto]
-  "hash_hmac(":         [crypto]
-  "password_hash(":     [crypto]
-  "password_verify(":   [crypto]
-  "sodium_crypto_":     [crypto]
-  "mcrypt_encrypt(":    [crypto]
-
-  # Reflection / introspection
-  "ReflectionClass(":   [reflect]
-  "ReflectionFunction(": [reflect]
-  "ReflectionMethod(":  [reflect]
-  "get_class(":         [reflect]
-  "get_object_vars(":   [reflect]
-  "get_class_methods(": [reflect]
-  "method_exists(":     [reflect]
-  "property_exists(":   [reflect]
-
-  # Dynamic loading
-  "dl(":                [plugin]
-  "class_alias(":       [plugin]
+  # ── Dynamic code/class loading ────────────────────────────────────────────
+  "dl(":                  [plugin]
+  "class_alias(":         [plugin]
   "spl_autoload_register(": [plugin]
+  "include ":             [plugin]
+  "include_once ":        [plugin]
+  "require ":             [plugin]
+  "require_once ":        [plugin]
+
+  # ── Network ───────────────────────────────────────────────────────────────
+  "curl_init(":           [network]
+  "curl_exec(":           [network]
+  "curl_multi_init(":     [network]
+  "fsockopen(":           [network]
+  "pfsockopen(":          [network]
+  "socket_create(":       [network]
+  "socket_connect(":      [network]
+  "stream_socket_client(": [network]
+  "http_request(":        [network]
+  "new PDO(":             [network]
+  "mysqli_connect(":      [network]
+  "mysqli_query(":        [network]
+  "pg_connect(":          [network]
+  "pg_query(":            [network]
+  "ldap_connect(":        [network]
+  "ftp_connect(":         [network]
+  "imap_open(":           [network]
+  "odbc_connect(":        [network]
+  "redis_connect(":       [network]
+  "new Predis":           [network]
+  "new Redis(":           [network]
+
+  # ── Filesystem reads ──────────────────────────────────────────────────────
+  "file_get_contents(":   [fs:read, network]
+  "fopen(":               [fs:read]
+  "file(":                [fs:read]
+  "readfile(":            [fs:read]
+  "glob(":                [fs:read]
+  "opendir(":             [fs:read]
+  "scandir(":             [fs:read]
+  "is_file(":             [fs:read]
+  "is_dir(":              [fs:read]
+  "file_exists(":         [fs:read]
+  "realpath(":            [fs:read]
+  "pathinfo(":            [fs:read]
+  "stat(":                [fs:read]
+  "lstat(":               [fs:read]
+  "filectime(":           [fs:read]
+  "filemtime(":           [fs:read]
+  "filesize(":            [fs:read]
+  "is_readable(":         [fs:read]
+  "is_writable(":         [fs:read]
+
+  # ── Filesystem writes ─────────────────────────────────────────────────────
+  "file_put_contents(":   [fs:write]
+  "fwrite(":              [fs:write]
+  "fputs(":               [fs:write]
+  "unlink(":              [fs:write]
+  "rename(":              [fs:write]
+  "mkdir(":               [fs:write]
+  "rmdir(":               [fs:write]
+  "copy(":                [fs:write]
+  "move_uploaded_file(":  [fs:write]
+  "touch(":               [fs:write]
+  "chmod(":               [fs:write]
+  "chown(":               [fs:write]
+  "symlink(":             [fs:write]
+  "link(":                [fs:write]
+  "tempnam(":             [fs:write]
+  "tmpfile(":             [fs:write]
+
+  # ── Environment ───────────────────────────────────────────────────────────
+  "getenv(":              [env]
+  "putenv(":              [env]
+  "php_uname(":           [env]
+  "php_sapi_name(":       [env]
+  "$_ENV":                [env]
+  "$_SERVER":             [env]
+  "$_GET":                [env]
+  "$_POST":               [env]
+  "$_REQUEST":            [env]
+  "$_COOKIE":             [env]
+  "$_SESSION":            [env]
+  "$_FILES":              [fs:write]
+
+  # ── Cryptography ──────────────────────────────────────────────────────────
+  "openssl_encrypt(":     [crypto]
+  "openssl_decrypt(":     [crypto]
+  "openssl_sign(":        [crypto]
+  "openssl_verify(":      [crypto]
+  "openssl_pkey_new(":    [crypto]
+  "openssl_pkey_get_private(": [crypto]
+  "openssl_pkey_get_public(":  [crypto]
+  "openssl_random_pseudo_bytes(": [crypto]
+  "hash(":                [crypto]
+  "hmac(":                [crypto]
+  "hash_hmac(":           [crypto]
+  "password_hash(":       [crypto]
+  "password_verify(":     [crypto]
+  "sodium_crypto_":       [crypto]
+  "mcrypt_encrypt(":      [crypto]
+  "base64_encode(":       [crypto]
+  "base64_decode(":       [crypto]
+  "random_bytes(":        [crypto]
+  "random_int(":          [crypto]
+  "crypt(":               [crypto]
+
+  # ── Reflection / introspection ────────────────────────────────────────────
+  "new ReflectionClass(": [reflect]
+  "new ReflectionFunction(": [reflect]
+  "new ReflectionMethod(": [reflect]
+  "new ReflectionProperty(": [reflect]
+  "get_class(":           [reflect]
+  "get_parent_class(":    [reflect]
+  "get_object_vars(":     [reflect]
+  "get_class_methods(":   [reflect]
+  "method_exists(":       [reflect]
+  "property_exists(":     [reflect]
+  "serialize(":           [reflect]
+  "compact(":             [reflect]
+  "var_export(":          [reflect]
+  "debug_backtrace(":     [reflect]
+  "debug_print_backtrace(": [reflect]
+  "get_defined_vars(":    [reflect]
+  "get_declared_classes(": [reflect]
+
+  # ── Laravel facades (static method calls) ─────────────────────────────────
+  # Storage
+  "Storage::put(":        [fs:write]
+  "Storage::get(":        [fs:read]
+  "Storage::delete(":     [fs:write]
+  "Storage::copy(":       [fs:read, fs:write]
+  "Storage::move(":       [fs:read, fs:write]
+  "Storage::exists(":     [fs:read]
+  "Storage::files(":      [fs:read]
+  "Storage::url(":        [network]
+  "Storage::disk(":       [fs:read, fs:write]
+  "Storage::cloud(":      [fs:read, fs:write, network]
+  "Storage::makeDirectory(": [fs:write]
+  "Storage::deleteDirectory(": [fs:write]
+
+  # HTTP client
+  "Http::get(":           [network]
+  "Http::post(":          [network]
+  "Http::put(":           [network]
+  "Http::patch(":         [network]
+  "Http::delete(":        [network]
+  "Http::withHeaders(":   [network]
+  "Http::withToken(":     [network, crypto]
+  "Http::pool(":          [network]
+  "Http::fake(":          [network]
+
+  # Mail
+  "Mail::send(":          [network]
+  "Mail::to(":            [network]
+  "Mail::cc(":            [network]
+  "Mail::bcc(":           [network]
+  "Mail::queue(":         [network, exec]
+  "Mail::later(":         [network, exec]
+  "Mail::raw(":           [network]
+
+  # Notifications
+  "Notification::send(":  [network]
+  "Notification::sendNow(": [network]
+  "Notification::route(": [network]
+
+  # Queue
+  "Queue::push(":         [exec, network]
+  "Queue::later(":        [exec, network]
+  "Queue::bulk(":         [exec, network]
+  "Queue::connection(":   [exec, network]
+  "dispatch(":            [exec]
+  "dispatchSync(":        [exec]
+  "dispatchNow(":         [exec]
+
+  # Artisan / process
+  "Artisan::call(":       [exec]
+  "Artisan::queue(":      [exec, network]
+  "Artisan::output(":     [exec]
+  "Process::run(":        [exec]
+  "Process::pipe(":       [exec]
+  "Process::pool(":       [exec]
+
+  # Events / broadcasting
+  "Event::dispatch(":     [exec]
+  "event(":               [exec]
+  "broadcast(":           [network]
+
+  # File facade
+  "File::get(":           [fs:read]
+  "File::put(":           [fs:write]
+  "File::delete(":        [fs:write]
+  "File::exists(":        [fs:read]
+  "File::copy(":          [fs:read, fs:write]
+  "File::move(":          [fs:read, fs:write]
+  "File::makeDirectory(": [fs:write]
+  "File::glob(":          [fs:read]
+  "File::allFiles(":      [fs:read]
+  "File::directories(":   [fs:read]
+  "File::isFile(":        [fs:read]
+  "File::isDirectory(":   [fs:read]
+
+  # Cache
+  "Cache::get(":          [fs:read]
+  "Cache::put(":          [fs:write]
+  "Cache::remember(":     [fs:read, fs:write]
+  "Cache::forever(":      [fs:write]
+  "Cache::forget(":       [fs:write]
+  "Cache::flush(":        [fs:write]
+  "Cache::has(":          [fs:read]
+  "Cache::store(":        [fs:read, fs:write]
+
+  # Database raw queries (unsafe: SQL injection risk)
+  "DB::statement(":       [unsafe, network]
+  "DB::unprepared(":      [unsafe, network]
+  "DB::raw(":             [unsafe]
+  "DB::select(":          [network]
+  "DB::insert(":          [network]
+  "DB::update(":          [network]
+  "DB::delete(":          [network]
+  "DB::table(":           [network]
+  "DB::transaction(":     [network]
+  "DB::connection(":      [network]
+
+  # Logging
+  "Log::info(":           [fs:write]
+  "Log::warning(":        [fs:write]
+  "Log::error(":          [fs:write]
+  "Log::critical(":       [fs:write]
+  "Log::alert(":          [fs:write]
+  "Log::emergency(":      [fs:write]
+  "Log::debug(":          [fs:write]
+  "Log::channel(":        [fs:write]
+  "Log::stack(":          [fs:write]
+
+  # Encryption / hashing
+  "Crypt::encrypt(":      [crypto]
+  "Crypt::decrypt(":      [crypto]
+  "Crypt::encryptString(": [crypto]
+  "Crypt::decryptString(": [crypto]
+  "Hash::make(":          [crypto]
+  "Hash::check(":         [crypto]
+  "Hash::needsRehash(":   [crypto]
+
+  # Config / environment
+  "Config::get(":         [env]
+  "Config::set(":         [env]
+  "Config::has(":         [env]
+  "config(":              [env]
+  "env(":                 [env]
+
+  # SSH / remote exec
+  "SSH::run(":            [exec, network]
+  "SSH::into(":           [exec, network]
+
+  # Laravel helpers
+  "asset(":               [network]
+  "redirect(":            [network]
+  "response()->download(": [fs:read]
+  "response()->file(":    [fs:read]
+  "response()->streamDownload(": [fs:read, network]
+  "->storeAs(":           [fs:write]
+  "->store(":             [fs:write]
