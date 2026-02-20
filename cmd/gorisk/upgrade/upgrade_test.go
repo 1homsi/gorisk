@@ -6,6 +6,51 @@ import (
 	"testing"
 )
 
+func TestSplitAt(t *testing.T) {
+	tests := []struct {
+		input     string
+		wantLeft  string
+		wantRight string
+		wantOK    bool
+	}{
+		{"golang.org/x/crypto@v0.15.0", "golang.org/x/crypto", "v0.15.0", true},
+		{"github.com/foo/bar@v1.2.3", "github.com/foo/bar", "v1.2.3", true},
+		{"noversion", "", "", false},
+		{"module@v1@v2", "module@v1", "v2", true}, // LastIndex picks rightmost @
+	}
+	for _, tt := range tests {
+		left, right, ok := splitAt(tt.input)
+		if ok != tt.wantOK || left != tt.wantLeft || right != tt.wantRight {
+			t.Errorf("splitAt(%q) = (%q, %q, %v), want (%q, %q, %v)",
+				tt.input, left, right, ok, tt.wantLeft, tt.wantRight, tt.wantOK)
+		}
+	}
+}
+
+func TestRunNoArgs(t *testing.T) {
+	testDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(testDir)
+
+	exitCode := Run([]string{})
+	if exitCode != 2 {
+		t.Errorf("expected exit code 2 for no args, got %d", exitCode)
+	}
+}
+
+func TestRunMissingVersion(t *testing.T) {
+	testDir := t.TempDir()
+	origDir, _ := os.Getwd()
+	defer os.Chdir(origDir)
+	os.Chdir(testDir)
+
+	exitCode := Run([]string{"golang.org/x/crypto"}) // no @version
+	if exitCode != 2 {
+		t.Errorf("expected exit code 2 for missing @version, got %d", exitCode)
+	}
+}
+
 func TestRun(t *testing.T) {
 	testDir := t.TempDir()
 	testCode := `package main

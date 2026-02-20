@@ -56,6 +56,44 @@ func TestIRGraphFunctions(t *testing.T) {
 	}
 }
 
+func TestContextString(t *testing.T) {
+	// Entry context (zero-value caller)
+	entry := Context{}
+	if got := entry.String(); got != "<entry>" {
+		t.Errorf("empty Context.String() = %q, want <entry>", got)
+	}
+
+	// Named caller context
+	named := Context{Caller: Symbol{Package: "mypkg", Name: "Run", Kind: "func"}}
+	if got := named.String(); got != "mypkg.Run" {
+		t.Errorf("named Context.String() = %q, want mypkg.Run", got)
+	}
+}
+
+func TestContextNodeString(t *testing.T) {
+	sym := Symbol{Package: "os/exec", Name: "Command", Kind: "func"}
+	ctx := Context{Caller: Symbol{Package: "main", Name: "run", Kind: "func"}}
+	cn := ContextNode{Function: sym, Context: ctx}
+
+	want := "os/exec.Command@main.run"
+	if got := cn.String(); got != want {
+		t.Errorf("ContextNode.String() = %q, want %q", got, want)
+	}
+}
+
+func TestNewCSCallGraph(t *testing.T) {
+	cg := NewCSCallGraph()
+	if cg == nil {
+		t.Fatal("NewCSCallGraph returned nil")
+	}
+	if cg.Nodes == nil || cg.Edges == nil || cg.ReverseEdges == nil {
+		t.Error("NewCSCallGraph maps should be initialized")
+	}
+	if cg.Summaries == nil || cg.SCCs == nil || cg.NodeToSCC == nil {
+		t.Error("NewCSCallGraph secondary maps should be initialized")
+	}
+}
+
 func TestCallEdge(t *testing.T) {
 	caller := Symbol{Package: "", Name: "bar", Kind: "func"}
 	callee := Symbol{Package: "os/exec", Name: "Command", Kind: "func"}
