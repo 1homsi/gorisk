@@ -19,7 +19,7 @@ Maps what your dependencies *can do* — network access, exec, filesystem writes
 
 Key differentiators:
 
-- **Polyglot** — pluggable `Analyzer` interface; ships with Go and Node.js today; Python, Rust, Java, and Ruby on the roadmap.
+- **Polyglot** — pluggable `Analyzer` interface; ships with Go, Node.js, and PHP (Composer/Laravel) today; Python, Rust, Java, and Ruby on the roadmap.
 - **Capability detection** — detect which packages can read files, make network calls, spawn processes, or use `unsafe`/`eval`. Know *what your dependencies can do* before they're in production.
 - **Evidence + confidence** — every capability detection is backed by file path, line number, match context, and a confidence score (import = 90%, call site = 60%, install script = 85%).
 - **Capability diff** — compare two versions of a dependency and detect capability escalation. If `v1.2.3 → v1.3.0` quietly added `exec` or `network`, gorisk flags it as a supply chain risk signal.
@@ -50,6 +50,7 @@ gorisk auto-detects the language from the project directory. Use `--lang` to ove
 gorisk scan              # auto-detect
 gorisk scan --lang go    # force Go
 gorisk scan --lang node  # force Node.js
+gorisk scan --lang php   # force PHP
 ```
 
 When both `go.mod` and `package.json` are present (monorepo), both analyzers run and their dependency graphs are merged.
@@ -60,6 +61,7 @@ When both `go.mod` and `package.json` are present (monorepo), both analyzers run
 |----------|----------|--------|-----------------|---------------------|
 | **Go** | `go` | ✅ stable | `go.mod` | `go.mod` + `go list` |
 | **Node.js** | `node` | ✅ stable | `package.json` | `package-lock.json` v1/v2/v3, `yarn.lock`, `pnpm-lock.yaml`; npm/yarn/pnpm workspaces (monorepos) |
+| **PHP** | `php` | ✅ stable | `composer.json` / `composer.lock` | `composer.lock`; Laravel, Symfony, and bare Composer projects |
 | Python | `python` | 🗓 planned | `requirements.txt` / `pyproject.toml` | `poetry.lock`, `Pipfile.lock`, `uv.lock` |
 | Rust | `rust` | 🗓 planned | `Cargo.toml` | `Cargo.lock` |
 | Java | `java` | 🗓 planned | `pom.xml` / `build.gradle` | Maven, Gradle lock files |
@@ -106,7 +108,7 @@ Detects capabilities via static AST analysis of `.go` source files. Every detect
 
 #### Node.js
 
-Scans `.js`, `.ts`, `.tsx`, `.mjs`, `.cjs` files for `require()`, ESM `import`, and dynamic `import()` patterns. Also scans `package.json` install scripts (`preinstall`, `install`, `postinstall`) for shell invocations.
+Scans `.js`, `.ts`, `.tsx`, `.mjs`, `.cjs` files for `require()`, ESM `import`, and dynamic `import()` patterns. Also scans `package.json` install scripts (`preinstall`, `install`, `postinstall`) for shell invocations. Covers 120+ popular npm packages (AWS SDK, Firebase, Prisma, Stripe, socket.io, etc.).
 
 | Import / call | Capabilities | Confidence |
 |--------------|--------------|------------|
@@ -123,6 +125,29 @@ Scans `.js`, `.ts`, `.tsx`, `.mjs`, `.cjs` files for `require()`, ESM `import`, 
 | `readFile`, `writeFile`, `unlink(` | `fs:read` / `fs:write` | 60% (callSite) |
 | `process.env` | `env` | 60% (callSite) |
 | `preinstall`/`postinstall` with `curl`/`wget`/`bash` | `exec` + `network` | 85% (installScript) |
+
+#### PHP
+
+Scans `.php` source files for function call patterns and `use` statements. Parses `composer.lock` for the full dependency tree. Covers 80+ Composer packages and 150+ call-site patterns.
+
+| Import / call | Capabilities | Confidence |
+|--------------|--------------|------------|
+| `aws/aws-sdk-php` | `network`, `fs:read`, `fs:write` | 90% (import) |
+| `laravel/framework` | `network`, `fs:read`, `fs:write`, `env`, `exec`, `crypto` | 90% (import) |
+| `guzzlehttp/guzzle` | `network` | 90% (import) |
+| `firebase/php-jwt`, `lcobucci/jwt` | `crypto` | 90% (import) |
+| `symfony/process` | `exec` | 90% (import) |
+| `monolog/monolog` | `fs:write`, `network` | 90% (import) |
+| `exec(`, `shell_exec(`, `system(` | `exec` | 75% (callSite) |
+| `eval(`, `unserialize(`, `parse_str(`, `extract(` | `unsafe` | 75% (callSite) |
+| `curl_init(`, `fsockopen(`, `new PDO(`, `mysqli_connect(` | `network` | 75% (callSite) |
+| `file_get_contents(`, `fopen(`, `glob(` | `fs:read` | 75% (callSite) |
+| `file_put_contents(`, `unlink(`, `mkdir(` | `fs:write` | 75% (callSite) |
+| `openssl_encrypt(`, `password_hash(`, `random_bytes(` | `crypto` | 75% (callSite) |
+| `$_ENV`, `$_SERVER`, `getenv(`, `$_GET`, `$_POST`, `$_COOKIE` | `env` | 75% (callSite) |
+| **Laravel facades**: `Storage::`, `Http::`, `Mail::`, `DB::`, `Artisan::` | various | 75% (callSite) |
+| `Cache::`, `Crypt::`, `Hash::`, `Log::`, `File::`, `Process::` | various | 75% (callSite) |
+| `dispatch(`, `event(`, `broadcast(` | `exec` / `network` | 75% (callSite) |
 
 ---
 

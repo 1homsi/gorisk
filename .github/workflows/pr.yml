@@ -9,9 +9,11 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build:
-    name: Build & Test
+  test:
+    name: Build, Test & Coverage
     runs-on: ubuntu-latest
+    outputs:
+      coverage: ${{ steps.coverage.outputs.pct }}
     steps:
       - uses: actions/checkout@v4
 
@@ -23,12 +25,32 @@ jobs:
       - name: Build
         run: go build ./...
 
-      - name: Test
-        run: go test ./...
+      - name: Test (race detector + coverage)
+        run: go test -race -coverprofile=coverage.out -covermode=atomic ./...
+
+      - name: Enforce coverage threshold
+        id: coverage
+        run: |
+          PCT=$(go tool cover -func=coverage.out | grep '^total:' | awk '{print $3}' | tr -d '%')
+          echo "pct=${PCT}" >> "$GITHUB_OUTPUT"
+          echo "Coverage: ${PCT}%"
+          THRESHOLD=50
+          # Use awk for float comparison (bc may not be available)
+          if awk "BEGIN { exit !($PCT < $THRESHOLD) }"; then
+            echo "::error::Coverage ${PCT}% is below the ${THRESHOLD}% minimum threshold"
+            exit 1
+          fi
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.out
 
   scan:
     name: Gorisk Self-Scan
-    needs: [build]
+    needs: [test]
     runs-on: ubuntu-latest
     permissions:
       security-events: write
@@ -49,8 +71,8 @@ jobs:
 
   report:
     name: Post PR Comment
-    needs: [build, scan]
-    if: always() && needs.build.result != 'cancelled' && needs.scan.result != 'cancelled'
+    needs: [test, scan]
+    if: always() && needs.test.result != 'cancelled' && needs.scan.result != 'cancelled'
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
@@ -60,18 +82,25 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           REPO: ${{ github.repository }}
-          BUILD_RESULT: ${{ needs.build.result }}
+          TEST_RESULT: ${{ needs.test.result }}
           SCAN_RESULT: ${{ needs.scan.result }}
+          COVERAGE: ${{ needs.test.outputs.coverage }}
         run: |
-          BUILD_ICON=$([ "$BUILD_RESULT" = "success" ] && echo "✅" || echo "❌")
+          TEST_ICON=$([ "$TEST_RESULT" = "success" ] && echo "✅" || echo "❌")
           SCAN_ICON=$([ "$SCAN_RESULT" = "success" ] && echo "✅" || echo "❌")
-          if [ "$BUILD_RESULT" = "success" ] && [ "$SCAN_RESULT" = "success" ]; then
+          if [ "$TEST_RESULT" = "success" ] && [ "$SCAN_RESULT" = "success" ]; then
             SUMMARY="All checks passed."
           else
             SUMMARY="One or more checks failed."
           fi
           SHORT_SHA="${GITHUB_SHA::7}"
-          printf '### gorisk CI — %s\n\n| Check | Result |\n|-------|--------|\n| Build & Test | %s `%s` |\n| Gorisk Self-Scan | %s `%s` |\n\n_Commit: `%s`_\n' \
-            "$SUMMARY" "$BUILD_ICON" "$BUILD_RESULT" "$SCAN_ICON" "$SCAN_RESULT" "$SHORT_SHA" \
+          # Coverage badge colour
+          if [ -n "$COVERAGE" ]; then
+            COV_LINE="| Coverage | ${TEST_ICON} \`${COVERAGE}%\` |"
+          else
+            COV_LINE="| Coverage | ⚠️ \`n/a\` |"
+          fi
+          printf '### gorisk CI — %s\n\n| Check | Result |\n|-------|--------|\n| Build & Test (race) | %s `%s` |\n%s\n| Gorisk Self-Scan | %s `%s` |\n\n_Commit: `%s`_\n' \
+            "$SUMMARY" "$TEST_ICON" "$TEST_RESULT" "$COV_LINE" "$SCAN_ICON" "$SCAN_RESULT" "$SHORT_SHA" \
             > /tmp/comment.md
           gh pr comment "$PR_NUMBER" --repo "$REPO" --body-file /tmp/comment.md

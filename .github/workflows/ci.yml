@@ -5,8 +5,8 @@ on:
     branches: [main]
 
 jobs:
-  build:
-    name: Build
+  test:
+    name: Build & Test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -19,9 +19,12 @@ jobs:
       - name: Build
         run: go build ./...
 
+      - name: Test (race detector)
+        run: go test -race ./...
+
   scan:
     name: Gorisk Self-Scan
-    needs: [build]
+    needs: [test]
     runs-on: ubuntu-latest
     permissions:
       security-events: write

@@ -84,6 +84,132 @@ func TestPRDiffReportEmpty(t *testing.T) {
 	}
 }
 
+// ── parseComposerJSONDiff (PHP) ───────────────────────────────────────────────
+
+func TestParseComposerJSONDiffAdded(t *testing.T) {
+	diff := `diff --git a/composer.json b/composer.json
+--- a/composer.json
++++ b/composer.json
+@@ -5,6 +5,7 @@
+     "require": {
++        "symfony/process": "^6.0",
+         "guzzlehttp/guzzle": "^7.0"
+     }
+`
+	report := parseComposerJSONDiff(diff)
+	if len(report.Added) != 1 {
+		t.Fatalf("expected 1 Added, got %d", len(report.Added))
+	}
+	if report.Added[0].Module != "symfony/process" {
+		t.Errorf("Added[0].Module = %q, want symfony/process", report.Added[0].Module)
+	}
+}
+
+func TestParseComposerJSONDiffRemoved(t *testing.T) {
+	diff := `diff --git a/composer.json b/composer.json
+--- a/composer.json
++++ b/composer.json
+@@ -5,7 +5,6 @@
+     "require": {
+-        "firebase/php-jwt": "^5.0",
+         "guzzlehttp/guzzle": "^7.0"
+     }
+`
+	report := parseComposerJSONDiff(diff)
+	if len(report.Removed) != 1 {
+		t.Fatalf("expected 1 Removed, got %d", len(report.Removed))
+	}
+	if report.Removed[0] != "firebase/php-jwt" {
+		t.Errorf("Removed[0] = %q, want firebase/php-jwt", report.Removed[0])
+	}
+}
+
+func TestParseComposerJSONDiffUpdated(t *testing.T) {
+	diff := `diff --git a/composer.json b/composer.json
+--- a/composer.json
++++ b/composer.json
+@@ -5,6 +5,6 @@
+     "require": {
+-        "guzzlehttp/guzzle": "^6.0",
++        "guzzlehttp/guzzle": "^7.0",
+         "php": "^8.0"
+     }
+`
+	report := parseComposerJSONDiff(diff)
+	if len(report.Updated) != 1 {
+		t.Fatalf("expected 1 Updated, got %d: %v", len(report.Updated), report.Updated)
+	}
+	if report.Updated[0].Module != "guzzlehttp/guzzle" {
+		t.Errorf("Updated[0].Module = %q, want guzzlehttp/guzzle", report.Updated[0].Module)
+	}
+}
+
+func TestParseComposerJSONDiffEmpty(t *testing.T) {
+	report := parseComposerJSONDiff("")
+	if len(report.Added)+len(report.Removed)+len(report.Updated) != 0 {
+		t.Errorf("expected empty report for empty diff, got %+v", report)
+	}
+}
+
+func TestParseComposerJSONDiffSkipsDiffHeaders(t *testing.T) {
+	// Lines like "--- a/composer.json" and "+++ b/composer.json" must be skipped
+	diff := `diff --git a/composer.json b/composer.json
+--- a/composer.json
++++ b/composer.json
++        "monolog/monolog": "^3.0"
+`
+	report := parseComposerJSONDiff(diff)
+	// "--- a/composer.json" and "+++ b/composer.json" should be skipped, only the dep line counts
+	if len(report.Added) != 1 {
+		t.Fatalf("expected 1 Added, got %d", len(report.Added))
+	}
+	if report.Added[0].Module != "monolog/monolog" {
+		t.Errorf("Added module = %q, want monolog/monolog", report.Added[0].Module)
+	}
+}
+
+// ── parseComposerDepLine (PHP) ────────────────────────────────────────────────
+
+func TestParseComposerDepLine(t *testing.T) {
+	tests := []struct {
+		line    string
+		name    string
+		version string
+		ok      bool
+	}{
+		{`"guzzlehttp/guzzle": "^7.0",`, "guzzlehttp/guzzle", "^7.0", true},
+		{`"symfony/process": "^6.0"`, "symfony/process", "^6.0", true},
+		{`  "aws/aws-sdk-php": "^3.0",`, "aws/aws-sdk-php", "^3.0", true},
+		// No slash → not a vendor/package name
+		{`"php": "^8.0"`, "", "", false},
+		// Not a quoted key
+		{`invalid line`, "", "", false},
+		{``, "", "", false},
+	}
+	for _, tt := range tests {
+		t.Run(tt.line, func(t *testing.T) {
+			n, v, ok := parseComposerDepLine(tt.line)
+			if ok != tt.ok {
+				t.Errorf("ok = %v, want %v", ok, tt.ok)
+			}
+			if ok {
+				if n != tt.name {
+					t.Errorf("name = %q, want %q", n, tt.name)
+				}
+				if v != tt.version {
+					t.Errorf("version = %q, want %q", v, tt.version)
+				}
+			}
+		})
+	}
+}
+
+// ── PHPDiffer interface ────────────────────────────────────────────────────────
+
+func TestPHPDifferImplementsInterface(t *testing.T) {
+	var _ Differ = PHPDiffer{}
+}
+
 func TestModuleDiffWithCapabilities(t *testing.T) {
 	caps := capability.CapabilitySet{}
 	caps.Add(capability.CapExec)

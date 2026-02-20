@@ -1,6 +1,9 @@
 package scan
 
 import (
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -187,5 +190,273 @@ func TestFilterTaintFindingsNoExceptions(t *testing.T) {
 	// No exceptions, all findings should remain
 	if len(filtered) != len(findings) {
 		t.Errorf("expected %d findings, got %d", len(findings), len(filtered))
+	}
+}
+
+// ── fmtDur ───────────────────────────────────────────────────────────────────
+
+func TestFmtDur(t *testing.T) {
+	tests := []struct {
+		d        time.Duration
+		contains string
+	}{
+		{200 * time.Microsecond, "ms"}, // sub-ms → "X.XXms"
+		{999 * time.Microsecond, "ms"}, // sub-ms → "X.XXms"
+		{time.Millisecond, "s"},        // ≥1ms → seconds branch → "0.00s"
+		{time.Second, "s"},
+		{2500 * time.Millisecond, "s"},
+	}
+	for _, tt := range tests {
+		got := fmtDur(tt.d)
+		if !strings.Contains(got, tt.contains) {
+			t.Errorf("fmtDur(%v) = %q, want to contain %q", tt.d, got, tt.contains)
+		}
+	}
+}
+
+func TestFmtDurSubMs(t *testing.T) {
+	got := fmtDur(500 * time.Microsecond)
+	// Sub-millisecond: formatted as X.XXms
+	if !strings.HasSuffix(got, "ms") {
+		t.Errorf("fmtDur(500µs) = %q, want suffix ms", got)
+	}
+}
+
+// ── writeExceptionSummary ─────────────────────────────────────────────────────
+
+func TestWriteExceptionSummary(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	writeExceptionSummary(f, exceptionStats{
+		Applied:         3,
+		Expired:         1,
+		TaintSuppressed: 2,
+		MissingJustify:  1,
+	})
+	f.Close()
+
+	got, err := os.ReadFile(f.Name())
+	if err != nil {
+		t.Fatal(err)
+	}
+	content := string(got)
+	if !strings.Contains(content, "Applied: 3") {
+		t.Errorf("want 'Applied: 3', got: %s", content)
+	}
+	if !strings.Contains(content, "Taint flows suppressed: 2") {
+		t.Errorf("want taint suppressed line, got: %s", content)
+	}
+	if !strings.Contains(content, "Expired (not applied): 1") {
+		t.Errorf("want expired line, got: %s", content)
+	}
+	if !strings.Contains(content, "Missing justification: 1") {
+		t.Errorf("want missing-justification line, got: %s", content)
+	}
+}
+
+func TestWriteExceptionSummaryZeroCounts(t *testing.T) {
+	f, err := os.CreateTemp(t.TempDir(), "*.txt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+
+	writeExceptionSummary(f, exceptionStats{Applied: 0})
+	f.Close()
+
+	got, _ := os.ReadFile(f.Name())
+	content := string(got)
+	// Zero counts for taint/expired/missing should not appear
+	if strings.Contains(content, "Taint") {
+		t.Errorf("unexpected Taint line for zero count: %s", content)
+	}
+	if strings.Contains(content, "Expired") {
+		t.Errorf("unexpected Expired line for zero count: %s", content)
+	}
+}
+
+// ── Run ───────────────────────────────────────────────────────────────────────
+
+func TestRunBadLang(t *testing.T) {
+	dir := t.TempDir()
+	gomod := "module test\ngo 1.22\n"
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	defer os.Chdir(orig) //nolint:errcheck
+	os.Chdir(dir)        //nolint:errcheck
+
+	code := Run([]string{"--lang", "cobol"})
+	if code == 0 {
+		t.Error("expected non-zero exit for unknown language")
+	}
+}
+
+func TestRunBadPolicyFile(t *testing.T) {
+	dir := t.TempDir()
+	gomod := "module test\ngo 1.22\n"
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	defer os.Chdir(orig) //nolint:errcheck
+	os.Chdir(dir)        //nolint:errcheck
+
+	code := Run([]string{"--policy", "/nonexistent/policy.json"})
+	if code == 0 {
+		t.Error("expected non-zero exit for missing policy file")
+	}
+}
+
+func TestRunInvalidPolicyJSON(t *testing.T) {
+	dir := t.TempDir()
+	gomod := "module test\ngo 1.22\n"
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0600); err != nil {
+		t.Fatal(err)
+	}
+	policyPath := filepath.Join(dir, "policy.json")
+	if err := os.WriteFile(policyPath, []byte(`{invalid json`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	defer os.Chdir(orig) //nolint:errcheck
+	os.Chdir(dir)        //nolint:errcheck
+
+	code := Run([]string{"--policy", policyPath})
+	if code == 0 {
+		t.Error("expected non-zero exit for malformed policy JSON")
+	}
+}
+
+func TestRunInvalidPolicyVersion(t *testing.T) {
+	dir := t.TempDir()
+	gomod := "module test\ngo 1.22\n"
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0600); err != nil {
+		t.Fatal(err)
+	}
+	policyPath := filepath.Join(dir, "policy.json")
+	if err := os.WriteFile(policyPath, []byte(`{"version": 99}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	defer os.Chdir(orig) //nolint:errcheck
+	os.Chdir(dir)        //nolint:errcheck
+
+	code := Run([]string{"--policy", policyPath})
+	if code == 0 {
+		t.Error("expected non-zero exit for unsupported policy version")
+	}
+}
+
+func TestRunInvalidFailOn(t *testing.T) {
+	dir := t.TempDir()
+	gomod := "module test\ngo 1.22\n"
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(gomod), 0600); err != nil {
+		t.Fatal(err)
+	}
+	policyPath := filepath.Join(dir, "policy.json")
+	if err := os.WriteFile(policyPath, []byte(`{"version":1,"fail_on":"critical"}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	defer os.Chdir(orig) //nolint:errcheck
+	os.Chdir(dir)        //nolint:errcheck
+
+	code := Run([]string{"--policy", policyPath})
+	if code == 0 {
+		t.Error("expected non-zero exit for invalid fail_on value")
+	}
+}
+
+func TestRunGoProjectPasses(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test\ngo 1.22\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\nfunc main() {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	defer os.Chdir(orig) //nolint:errcheck
+	os.Chdir(dir)        //nolint:errcheck
+
+	code := Run([]string{"--lang", "go"})
+	if code != 0 {
+		t.Errorf("Run() = %d, want 0 for clean project", code)
+	}
+}
+
+func TestRunJSONOutput(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test\ngo 1.22\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\nfunc main() {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	defer os.Chdir(orig) //nolint:errcheck
+	os.Chdir(dir)        //nolint:errcheck
+
+	code := Run([]string{"--json", "--lang", "go"})
+	if code != 0 {
+		t.Errorf("Run(--json) = %d, want 0", code)
+	}
+}
+
+func TestRunSARIFOutput(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test\ngo 1.22\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\nfunc main() {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	defer os.Chdir(orig) //nolint:errcheck
+	os.Chdir(dir)        //nolint:errcheck
+
+	code := Run([]string{"--sarif", "--lang", "go"})
+	if code != 0 {
+		t.Errorf("Run(--sarif) = %d, want 0", code)
+	}
+}
+
+func TestRunWithExcludePackages(t *testing.T) {
+	if testing.Short() {
+		t.Skip("Skipping integration test in short mode")
+	}
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module test\ngo 1.22\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "main.go"), []byte("package main\nfunc main() {}\n"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	policyPath := filepath.Join(dir, "policy.json")
+	if err := os.WriteFile(policyPath, []byte(`{"version":1,"fail_on":"high","exclude_packages":["somelib/v2"]}`), 0600); err != nil {
+		t.Fatal(err)
+	}
+	orig, _ := os.Getwd()
+	defer os.Chdir(orig) //nolint:errcheck
+	os.Chdir(dir)        //nolint:errcheck
+
+	code := Run([]string{"--lang", "go", "--policy", policyPath})
+	if code != 0 {
+		t.Errorf("Run with policy = %d, want 0", code)
 	}
 }
