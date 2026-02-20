@@ -178,10 +178,13 @@ func TestFindFunctionCalls(t *testing.T) {
 	helper.doSomething();
 	await fetchData();
 	arr.map(transform);
+	transform();
 	`
 
 	calls := findFunctionCalls(body)
 
+	// Note: transform in map(transform) is a reference, not a call
+	// Only transform() is a call
 	expected := map[string]bool{
 		"processData": true,
 		"doSomething": true,
