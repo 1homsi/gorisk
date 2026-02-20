@@ -2,39 +2,46 @@ package interproc
 
 import (
 	"fmt"
+	"sort"
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/ir"
 )
 
-// ComputeFixpoint propagates summaries until convergence using a worklist algorithm.
+// ComputeFixpoint propagates summaries until convergence using a pending algorithm.
 // It returns an error if the maximum number of iterations is exceeded.
 func ComputeFixpoint(cg *ir.CSCallGraph, maxIterations int) error {
 	Debugf("[fixpoint] Starting fixpoint computation with max %d iterations", maxIterations)
 
-	// Initialize worklist with all nodes in reverse topological order (leaves first)
+	// Initialize pending with all nodes in reverse topological order (leaves first).
+	// Use a map for O(1) membership checks and a sorted slice for deterministic pops.
 	order := TopologicalSort(cg)
-	worklist := make(map[string]bool)
+	pending := make(map[string]bool, len(order))
 	for _, node := range order {
-		worklist[node.String()] = true
+		pending[node.String()] = true
 	}
 
-	Infof("[fixpoint] Initialized worklist with %d nodes", len(worklist))
+	// popWorklist returns the lexicographically-smallest pending key deterministically.
+	popWorklist := func() (string, ir.ContextNode) {
+		keys := make([]string, 0, len(pending))
+		for k := range pending {
+			keys = append(keys, k)
+		}
+		sort.Strings(keys)
+		key := keys[0]
+		delete(pending, key)
+		return key, cg.Nodes[key]
+	}
+
+	Infof("[fixpoint] Initialized pending with %d nodes", len(pending))
 	iteration := 0
 
-	for len(worklist) > 0 && iteration < maxIterations {
-		// Pop a node from the worklist (deterministic order)
-		var node ir.ContextNode
-		var nodeKey string
-		for k := range worklist {
-			nodeKey = k
-			node = cg.Nodes[k]
-			break
-		}
-		delete(worklist, nodeKey)
+	for len(pending) > 0 && iteration < maxIterations {
+		// Pop the smallest key for deterministic processing.
+		nodeKey, node := popWorklist()
 
-		Debugf("[fixpoint] Iteration %d: Processing %s (%d remaining in worklist)",
-			iteration, node.Function.String(), len(worklist))
+		Debugf("[fixpoint] Iteration %d: Processing %s (%d remaining in pending)",
+			iteration, node.Function.String(), len(pending))
 
 		// Handle SCC nodes specially
 		if sccID, inSCC := cg.NodeToSCC[nodeKey]; inSCC {
@@ -55,7 +62,7 @@ func ComputeFixpoint(cg *ir.CSCallGraph, maxIterations int) error {
 					for _, caller := range cg.ReverseEdges[sccNodeKey] {
 						// Don't re-enqueue nodes in the same SCC
 						if callerSCCID, ok := cg.NodeToSCC[caller.String()]; !ok || callerSCCID != sccID {
-							worklist[caller.String()] = true
+							pending[caller.String()] = true
 						}
 					}
 				}
@@ -86,7 +93,7 @@ func ComputeFixpoint(cg *ir.CSCallGraph, maxIterations int) error {
 				Debugf("[fixpoint]   → Re-enqueuing %d callers", len(callers))
 				for _, caller := range callers {
 					Debugf("[fixpoint]     ← %s", caller.Function.String())
-					worklist[caller.String()] = true
+					pending[caller.String()] = true
 				}
 			}
 
@@ -96,9 +103,9 @@ func ComputeFixpoint(cg *ir.CSCallGraph, maxIterations int) error {
 		}
 	}
 
-	if len(worklist) > 0 {
-		Errorf("[fixpoint] Did not converge after %d iterations (%d nodes remaining)", maxIterations, len(worklist))
-		return fmt.Errorf("fixpoint did not converge after %d iterations (%d nodes remaining)", maxIterations, len(worklist))
+	if len(pending) > 0 {
+		Errorf("[fixpoint] Did not converge after %d iterations (%d nodes remaining)", maxIterations, len(pending))
+		return fmt.Errorf("fixpoint did not converge after %d iterations (%d nodes remaining)", maxIterations, len(pending))
 	}
 
 	Infof("[fixpoint] Converged in %d iterations", iteration)

@@ -131,6 +131,53 @@ func TestFixpointCycle(t *testing.T) {
 	}
 }
 
+// TestFixpointDeterminism verifies that multiple runs produce identical summaries.
+func TestFixpointDeterminism(t *testing.T) {
+	buildGraph := func() *ir.CSCallGraph {
+		cg := ir.NewCSCallGraph()
+		names := []string{"Alpha", "Beta", "Gamma", "Delta"}
+		nodes := make([]ir.ContextNode, len(names))
+		for i, n := range names {
+			nodes[i] = ir.ContextNode{Function: ir.Symbol{Package: "pkg", Name: n}}
+			cg.Nodes[nodes[i].String()] = nodes[i]
+			cg.Summaries[nodes[i].String()] = ir.FunctionSummary{Node: nodes[i], Confidence: 1.0}
+		}
+		// Chain: Alpha → Beta → Gamma → Delta
+		cg.Edges[nodes[0].String()] = []ir.ContextNode{nodes[1]}
+		cg.Edges[nodes[1].String()] = []ir.ContextNode{nodes[2]}
+		cg.Edges[nodes[2].String()] = []ir.ContextNode{nodes[3]}
+		cg.ReverseEdges[nodes[1].String()] = []ir.ContextNode{nodes[0]}
+		cg.ReverseEdges[nodes[2].String()] = []ir.ContextNode{nodes[1]}
+		cg.ReverseEdges[nodes[3].String()] = []ir.ContextNode{nodes[2]}
+
+		// Delta has exec
+		summaryD := ir.FunctionSummary{Node: nodes[3], Confidence: 1.0}
+		summaryD.Effects.Add(capability.CapExec)
+		ClassifySummary(&summaryD)
+		cg.Summaries[nodes[3].String()] = summaryD
+		return cg
+	}
+
+	cg1 := buildGraph()
+	if err := ComputeFixpoint(cg1, 100); err != nil {
+		t.Fatalf("run 1 failed: %v", err)
+	}
+
+	cg2 := buildGraph()
+	if err := ComputeFixpoint(cg2, 100); err != nil {
+		t.Fatalf("run 2 failed: %v", err)
+	}
+
+	// Both runs must agree on every summary
+	for key := range cg1.Nodes {
+		s1 := cg1.Summaries[key]
+		s2 := cg2.Summaries[key]
+		if !SummariesEqual(s1, s2) {
+			t.Errorf("summaries differ for %s between runs", key)
+		}
+	}
+}
+
 func TestFixpointConvergence(t *testing.T) {
 	// Create a diamond: A → B, A → C, B → D, C → D
 	// D has exec, should propagate through both paths

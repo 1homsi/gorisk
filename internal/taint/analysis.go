@@ -134,69 +134,88 @@ type TaintFlow struct {
 	Sanitized      bool // crypto/validation in path
 }
 
-// traceTaintFlow finds the call path from source to sink.
-func (ta *TaintAnalysis) traceTaintFlow(node ir.ContextNode, source, sink capability.Capability) *TaintFlow {
-	// Simple heuristic: find where source and sink are directly present
-	summary := ta.CallGraph.Summaries[node.String()]
+// traceTaintFlow finds the multi-hop call path from a source-carrying node to
+// a sink-carrying node using BFS over the call graph edges.
+//
+// The startNode is a node that AnalyzeInterprocedural already determined has
+// both the source and sink capabilities (directly or transitively). traceTaintFlow
+// walks forward from startNode to find the actual function where the sink occurs,
+// producing a concrete call path for explanations.
+func (ta *TaintAnalysis) traceTaintFlow(startNode ir.ContextNode, source, sink capability.Capability) *TaintFlow {
+	startSummary := ta.CallGraph.Summaries[startNode.String()]
+	startSanitized := startSummary.Sanitizers.Has(capability.CapCrypto)
 
-	// Check if this node directly has both
-	directSource := summary.Sources.Has(source)
-	directSink := summary.Sinks.Has(sink)
-
-	if directSource && directSink {
-		// Both in same function
+	// If both source and sink are directly in the same function, the path is empty.
+	directSrc := startSummary.Sources.Has(source) || startSummary.Effects.Has(source)
+	directSink := startSummary.Sinks.Has(sink) || startSummary.Effects.Has(sink)
+	if directSrc && directSink {
 		return &TaintFlow{
-			SourceFunction: node.Function,
-			SinkFunction:   node.Function,
+			SourceFunction: startNode.Function,
+			SinkFunction:   startNode.Function,
 			CallPath:       []ir.CallEdge{},
-			Sanitized:      summary.Sanitizers.Has(capability.CapCrypto),
+			Sanitized:      startSanitized,
 		}
 	}
 
-	// Otherwise, try to find source in callees and sink locally, or vice versa
-	// This is a simplified version; a full implementation would use BFS/DFS
+	// BFS: from startNode (which has source, directly or transitively), walk
+	// forward through call edges to find the first node that directly has sink.
+	type bfsItem struct {
+		node ir.ContextNode
+		path []ir.CallEdge
+	}
 
-	// Check if source is in a callee and sink is local
-	if directSink {
-		for _, callee := range ta.CallGraph.Edges[node.String()] {
-			calleeSummary := ta.CallGraph.Summaries[callee.String()]
-			if calleeSummary.Sources.Has(source) || calleeSummary.Transitive.Has(source) {
-				return &TaintFlow{
-					SourceFunction: callee.Function,
-					SinkFunction:   node.Function,
-					CallPath: []ir.CallEdge{
-						{Caller: node.Function, Callee: callee.Function},
-					},
-					Sanitized: summary.Sanitizers.Has(capability.CapCrypto) || calleeSummary.Sanitizers.Has(capability.CapCrypto),
-				}
+	queue := []bfsItem{{node: startNode, path: nil}}
+	visited := make(map[string]bool)
+
+	for len(queue) > 0 {
+		item := queue[0]
+		queue = queue[1:]
+
+		key := item.node.String()
+		if visited[key] {
+			continue
+		}
+		visited[key] = true
+
+		summary := ta.CallGraph.Summaries[key]
+		nodeHasSink := summary.Sinks.Has(sink) || summary.Effects.Has(sink)
+
+		// If we've moved away from the start and found a node with sink, report the path.
+		if len(item.path) > 0 && nodeHasSink {
+			sanitized := startSanitized || summary.Sanitizers.Has(capability.CapCrypto)
+			srcFunc := startNode.Function
+			if len(item.path) > 0 {
+				srcFunc = item.path[0].Caller
+			}
+			return &TaintFlow{
+				SourceFunction: srcFunc,
+				SinkFunction:   item.node.Function,
+				CallPath:       item.path,
+				Sanitized:      sanitized,
 			}
 		}
-	}
 
-	// Check if sink is in a callee and source is local
-	if directSource {
-		for _, callee := range ta.CallGraph.Edges[node.String()] {
-			calleeSummary := ta.CallGraph.Summaries[callee.String()]
-			if calleeSummary.Sinks.Has(sink) || calleeSummary.Transitive.Has(sink) {
-				return &TaintFlow{
-					SourceFunction: node.Function,
-					SinkFunction:   callee.Function,
-					CallPath: []ir.CallEdge{
-						{Caller: node.Function, Callee: callee.Function},
-					},
-					Sanitized: summary.Sanitizers.Has(capability.CapCrypto) || calleeSummary.Sanitizers.Has(capability.CapCrypto),
-				}
+		// Extend BFS to callees.
+		for _, callee := range ta.CallGraph.Edges[key] {
+			if visited[callee.String()] {
+				continue
 			}
+			newPath := make([]ir.CallEdge, len(item.path)+1)
+			copy(newPath, item.path)
+			newPath[len(item.path)] = ir.CallEdge{
+				Caller: item.node.Function,
+				Callee: callee.Function,
+			}
+			queue = append(queue, bfsItem{node: callee, path: newPath})
 		}
 	}
 
-	// If we reach here, the flow is more complex (multi-hop)
-	// For now, return a simple flow
+	// Fallback: return a minimal flow anchored at the start node.
 	return &TaintFlow{
-		SourceFunction: node.Function,
-		SinkFunction:   node.Function,
+		SourceFunction: startNode.Function,
+		SinkFunction:   startNode.Function,
 		CallPath:       []ir.CallEdge{},
-		Sanitized:      summary.Sanitizers.Has(capability.CapCrypto),
+		Sanitized:      startSanitized,
 	}
 }
 

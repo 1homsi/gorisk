@@ -1,6 +1,8 @@
 package interproc
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/1homsi/gorisk/internal/capability"
@@ -135,6 +137,61 @@ func TestCacheStatsZeroTotal(t *testing.T) {
 	c := NewCache(dir)
 	// No loads/stores - Stats should be a no-op
 	c.Stats()
+}
+
+// ── ComputeCodeHash ───────────────────────────────────────────────────────────
+
+func TestComputeCodeHashEmpty(t *testing.T) {
+	h := ComputeCodeHash(t.TempDir(), nil)
+	if h != "" {
+		t.Errorf("expected empty hash for nil files, got %q", h)
+	}
+}
+
+func TestComputeCodeHashDeterministic(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "a.go"), []byte("package main"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "b.go"), []byte("package main\nfunc Foo(){}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	h1 := ComputeCodeHash(dir, []string{"a.go", "b.go"})
+	h2 := ComputeCodeHash(dir, []string{"b.go", "a.go"}) // different order → same result (sorted)
+	if h1 != h2 {
+		t.Errorf("hash not deterministic across file orderings: %q vs %q", h1, h2)
+	}
+	if len(h1) != 16 {
+		t.Errorf("expected 16-char hash, got %q (len=%d)", h1, len(h1))
+	}
+}
+
+func TestComputeCodeHashChanges(t *testing.T) {
+	dir := t.TempDir()
+	fpath := filepath.Join(dir, "main.go")
+	if err := os.WriteFile(fpath, []byte("package main\nfunc A(){}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	h1 := ComputeCodeHash(dir, []string{"main.go"})
+
+	// Modify the file
+	if err := os.WriteFile(fpath, []byte("package main\nfunc A(){}\nfunc B(){}"), 0600); err != nil {
+		t.Fatal(err)
+	}
+	h2 := ComputeCodeHash(dir, []string{"main.go"})
+	if h1 == h2 {
+		t.Error("hash should change when file content changes")
+	}
+}
+
+func TestComputeCodeHashMissingFile(t *testing.T) {
+	// A missing file should not panic; its content is skipped.
+	h := ComputeCodeHash(t.TempDir(), []string{"nonexistent.go"})
+	// Should still produce a non-empty hash (based on filename)
+	if len(h) != 16 {
+		t.Errorf("expected 16-char hash even for missing files, got %q", h)
+	}
 }
 
 func TestCacheLocalPackage(t *testing.T) {

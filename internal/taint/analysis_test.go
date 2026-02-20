@@ -302,6 +302,97 @@ func TestDeduplicateFindingsEmpty(t *testing.T) {
 	}
 }
 
+// TestTraceTaintFlowBFS verifies that traceTaintFlow correctly finds multi-hop paths.
+// The setup mirrors what AnalyzeInterprocedural sees after the fixpoint:
+//
+//	srcNode: has network (Sources) + exec (Transitive, propagated from snkNode)
+//	midNode: empty
+//	snkNode: has exec (Sinks+Effects)
+//
+// traceTaintFlow is called on srcNode and must BFS forward to find snkNode.
+func TestTraceTaintFlowBFS(t *testing.T) {
+	cg := ir.NewCSCallGraph()
+
+	srcSym := ir.Symbol{Package: "test", Name: "src", Kind: "func"}
+	midSym := ir.Symbol{Package: "test", Name: "mid", Kind: "func"}
+	snkSym := ir.Symbol{Package: "test", Name: "snk", Kind: "func"}
+
+	srcNode := ir.ContextNode{Function: srcSym, Context: ir.Context{}}
+	midNode := ir.ContextNode{Function: midSym, Context: ir.Context{Caller: srcSym}}
+	snkNode := ir.ContextNode{Function: snkSym, Context: ir.Context{Caller: midSym}}
+
+	cg.Nodes[srcNode.String()] = srcNode
+	cg.Nodes[midNode.String()] = midNode
+	cg.Nodes[snkNode.String()] = snkNode
+	cg.Edges[srcNode.String()] = []ir.ContextNode{midNode}
+	cg.Edges[midNode.String()] = []ir.ContextNode{snkNode}
+
+	// srcNode: network in Sources; exec in Transitive (as if fixpoint propagated it)
+	srcSummary := ir.FunctionSummary{Node: srcNode, Confidence: 0.90}
+	srcSummary.Sources.AddWithEvidence(capability.CapNetwork, capability.CapabilityEvidence{
+		Via: "import", Confidence: 0.90,
+	})
+	srcSummary.Effects.AddWithEvidence(capability.CapNetwork, capability.CapabilityEvidence{
+		Via: "import", Confidence: 0.90,
+	})
+	srcSummary.Transitive.AddWithEvidence(capability.CapExec, capability.CapabilityEvidence{
+		Via: "propagated", Confidence: 0.55,
+	})
+
+	midSummary := ir.FunctionSummary{Node: midNode, Confidence: 0.90}
+
+	snkSummary := ir.FunctionSummary{Node: snkNode, Confidence: 0.90}
+	snkSummary.Sinks.AddWithEvidence(capability.CapExec, capability.CapabilityEvidence{
+		Via: "callSite", Confidence: 0.75,
+	})
+	snkSummary.Effects.AddWithEvidence(capability.CapExec, capability.CapabilityEvidence{
+		Via: "callSite", Confidence: 0.75,
+	})
+
+	cg.Summaries[srcNode.String()] = srcSummary
+	cg.Summaries[midNode.String()] = midSummary
+	cg.Summaries[snkNode.String()] = snkSummary
+
+	ta := NewInterprocedural(cg)
+	flow := ta.traceTaintFlow(srcNode, capability.CapNetwork, capability.CapExec)
+
+	if flow == nil {
+		t.Fatal("expected non-nil flow for multi-hop path")
+	}
+	// The BFS should walk from srcNode → midNode → snkNode and find exec there.
+	if len(flow.CallPath) == 0 {
+		t.Error("expected non-empty call path for multi-hop flow")
+	}
+	if flow.SinkFunction.Name != "snk" {
+		t.Errorf("SinkFunction.Name = %q, want snk", flow.SinkFunction.Name)
+	}
+}
+
+// TestTraceTaintFlowDirectSameFn verifies flows within a single function.
+func TestTraceTaintFlowDirectSameFn(t *testing.T) {
+	cg := buildCSCallGraph("test/pkg", "doAll",
+		[]capability.Capability{capability.CapEnv},
+		[]capability.Capability{capability.CapExec},
+	)
+	ta := NewInterprocedural(cg)
+
+	node := cg.Nodes[func() string {
+		for k := range cg.Nodes {
+			return k
+		}
+		return ""
+	}()]
+
+	flow := ta.traceTaintFlow(node, capability.CapEnv, capability.CapExec)
+	if flow == nil {
+		t.Fatal("expected non-nil flow")
+	}
+	// Same function has both — path should be empty
+	if len(flow.CallPath) != 0 {
+		t.Errorf("expected empty call path for same-function flow, got %d", len(flow.CallPath))
+	}
+}
+
 func TestGetConfidence(t *testing.T) {
 	ta := &TaintAnalysis{CallGraph: ir.NewCSCallGraph(), Rules: taintRules}
 

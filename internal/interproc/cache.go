@@ -4,8 +4,10 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"sync"
 	"time"
 
@@ -137,7 +139,7 @@ func (c *Cache) Store(key CacheKey, summary ir.FunctionSummary) {
 		Key:       key,
 		Summary:   summary,
 		Timestamp: time.Now(),
-		Version:   "dev", // TODO: Get actual version
+		Version:   "gorisk/v2",
 	}
 
 	data, err := json.MarshalIndent(entry, "", "  ")
@@ -163,6 +165,38 @@ func (c *Cache) entryPath(key CacheKey) string {
 
 	filename := fmt.Sprintf("%s_%s.json", key.Function.Name, key.Hash())
 	return filepath.Join(c.dir, pkg, filename)
+}
+
+// ComputeCodeHash hashes the contents of the given files (relative to dir)
+// to produce a stable cache key component. Files are hashed in sorted order
+// so that adding/removing/changing any file invalidates the cache.
+// Returns an empty string if no files can be read.
+func ComputeCodeHash(dir string, files []string) string {
+	if len(files) == 0 {
+		return ""
+	}
+
+	sorted := make([]string, len(files))
+	copy(sorted, files)
+	sort.Strings(sorted)
+
+	h := sha256.New()
+	for _, name := range sorted {
+		// Write the filename into the hash so renames are detected.
+		h.Write([]byte(name))
+		h.Write([]byte{0})
+
+		fpath := filepath.Join(dir, name)
+		f, err := os.Open(fpath)
+		if err != nil {
+			continue
+		}
+		_, _ = io.Copy(h, f)
+		f.Close()
+		h.Write([]byte{0})
+	}
+
+	return fmt.Sprintf("%x", h.Sum(nil))[:16]
 }
 
 // Stats logs cache hit/miss statistics.

@@ -145,26 +145,99 @@ func findFunctions(source, fpath string) []Function {
 	return functions
 }
 
-// findFunctionEnd finds the closing brace of a function
-// This is a simplified implementation - proper AST parsing would be better
+// findFunctionEnd finds the closing brace of a function using a state machine
+// that correctly handles strings, template literals, and comments.
 func findFunctionEnd(lines []string, startIdx int) int {
+	type state int
+	const (
+		stNormal       state = iota
+		stSingleQuote        // inside '...'
+		stDoubleQuote        // inside "..."
+		stTemplateLit        // inside `...`
+		stLineComment        // inside //...
+		stBlockComment       // inside /*...*/
+	)
+
 	depth := 0
-	startedCounting := false
+	started := false
+	cur := stNormal
 
 	for i := startIdx; i < len(lines); i++ {
 		line := lines[i]
+		runes := []rune(line)
+		n := len(runes)
 
-		for _, ch := range line {
-			switch ch {
-			case '{':
-				depth++
-				startedCounting = true
-			case '}':
-				depth--
-				if startedCounting && depth == 0 {
-					return i
+		for j := 0; j < n; j++ {
+			ch := runes[j]
+
+			switch cur {
+			case stNormal:
+				switch ch {
+				case '{':
+					depth++
+					started = true
+				case '}':
+					depth--
+					if started && depth == 0 {
+						return i
+					}
+				case '\'':
+					cur = stSingleQuote
+				case '"':
+					cur = stDoubleQuote
+				case '`':
+					cur = stTemplateLit
+				case '/':
+					if j+1 < n {
+						switch runes[j+1] {
+						case '/':
+							cur = stLineComment
+							j++
+						case '*':
+							cur = stBlockComment
+							j++
+						}
+					}
+				}
+
+			case stSingleQuote:
+				switch ch {
+				case '\\':
+					j++ // skip escaped char
+				case '\'':
+					cur = stNormal
+				}
+
+			case stDoubleQuote:
+				switch ch {
+				case '\\':
+					j++
+				case '"':
+					cur = stNormal
+				}
+
+			case stTemplateLit:
+				switch ch {
+				case '\\':
+					j++
+				case '`':
+					cur = stNormal
+				}
+
+			case stLineComment:
+				// Line comment ends at end of line — handled by outer loop reset.
+
+			case stBlockComment:
+				if ch == '*' && j+1 < n && runes[j+1] == '/' {
+					cur = stNormal
+					j++
 				}
 			}
+		}
+
+		// Line comment always resets at end of line.
+		if cur == stLineComment {
+			cur = stNormal
 		}
 	}
 

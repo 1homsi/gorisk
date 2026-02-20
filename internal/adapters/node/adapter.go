@@ -175,7 +175,7 @@ func (a *Adapter) Load(dir string) (*graph.DependencyGraph, error) {
 		g.Edges[wsName] = wsEdges
 	}
 
-	// Run interprocedural analysis on file-level (k=0: context-insensitive)
+	// Run interprocedural analysis and propagate enhanced capabilities back to packages.
 	if err := runInterproceduralAnalysis(g); err != nil {
 		interproc.Warnf("[node] Interprocedural analysis failed: %v", err)
 		// Continue without interprocedural results
@@ -185,23 +185,35 @@ func (a *Adapter) Load(dir string) (*graph.DependencyGraph, error) {
 	return g, nil
 }
 
-// runInterproceduralAnalysis builds a function-level call graph and runs the interprocedural engine.
-// For Node.js, we now use AST-based function detection (funcdetector.go) for function-level analysis.
+// runInterproceduralAnalysis builds a function-level call graph, runs the interprocedural
+// engine, and merges the enhanced (transitive) capabilities back into each package.
 func runInterproceduralAnalysis(g *graph.DependencyGraph) error {
 	// Build IRGraph from function-level analysis
 	irGraph := buildNodeFunctionIRGraph(g)
+	if len(irGraph.Functions) == 0 {
+		return nil // Nothing to analyze
+	}
 
 	// Run interprocedural analysis with k=1 (context-sensitive, function-level)
 	opts := interproc.DefaultOptions()
-	opts.ContextSensitivity = 1 // Function-level with callsite context
+	opts.ContextSensitivity = 1
 
-	_, _, err := interproc.RunAnalysis(irGraph, opts)
+	csGraph, _, err := interproc.RunAnalysis(irGraph, opts)
 	if err != nil {
 		return err
 	}
 
-	// Results are logged via verbose output
-	// Future: propagate enhanced capabilities back to packages
+	// Roll up context-sensitive summaries to package level — same pattern as Go adapter.
+	for nodeKey, node := range csGraph.Nodes {
+		summary := csGraph.Summaries[nodeKey]
+		pkg := g.Packages[node.Function.Package]
+		if pkg == nil {
+			continue
+		}
+		pkg.Capabilities.MergeWithEvidence(summary.Transitive)
+	}
+
+	interproc.Infof("[node] Interprocedural capabilities merged into %d packages", len(g.Packages))
 	return nil
 }
 

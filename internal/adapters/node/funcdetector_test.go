@@ -172,6 +172,86 @@ class MyClass {
 	}
 }
 
+// ── findFunctionEnd state machine ──────────────────────────────────────────
+
+func TestFindFunctionEndSimple(t *testing.T) {
+	lines := []string{
+		"function foo() {",
+		"  return 42;",
+		"}",
+	}
+	end := findFunctionEnd(lines, 0)
+	if end != 2 {
+		t.Errorf("findFunctionEnd simple = %d, want 2", end)
+	}
+}
+
+func TestFindFunctionEndBracesInString(t *testing.T) {
+	// Braces inside strings must not affect depth counting.
+	lines := []string{
+		`function greet() {`,
+		`  const s = "hello {world}";`,
+		`  return s;`,
+		`}`,
+	}
+	end := findFunctionEnd(lines, 0)
+	if end != 3 {
+		t.Errorf("findFunctionEnd with braces in string = %d, want 3", end)
+	}
+}
+
+func TestFindFunctionEndBracesInTemplateLiteral(t *testing.T) {
+	lines := []string{
+		"function tmpl() {",
+		"  return `value: ${x + 1}`;",
+		"}",
+	}
+	end := findFunctionEnd(lines, 0)
+	if end != 2 {
+		t.Errorf("findFunctionEnd with template literal = %d, want 2", end)
+	}
+}
+
+func TestFindFunctionEndLineComment(t *testing.T) {
+	lines := []string{
+		"function commented() {",
+		"  // this is a comment with a } brace",
+		"  return 1;",
+		"}",
+	}
+	end := findFunctionEnd(lines, 0)
+	if end != 3 {
+		t.Errorf("findFunctionEnd with line comment = %d, want 3", end)
+	}
+}
+
+func TestFindFunctionEndBlockComment(t *testing.T) {
+	lines := []string{
+		"function blocked() {",
+		"  /* open brace { inside block comment */",
+		"  return 2;",
+		"}",
+	}
+	end := findFunctionEnd(lines, 0)
+	if end != 3 {
+		t.Errorf("findFunctionEnd with block comment = %d, want 3", end)
+	}
+}
+
+func TestFindFunctionEndNested(t *testing.T) {
+	lines := []string{
+		"function outer() {",
+		"  if (x) {",
+		"    return { key: 1 };",
+		"  }",
+		"}",
+	}
+	end := findFunctionEnd(lines, 0)
+	if end != 4 {
+		t.Errorf("findFunctionEnd nested = %d, want 4", end)
+	}
+}
+
 func TestFindFunctionCalls(t *testing.T) {
 	body := `
 	const result = processData();
