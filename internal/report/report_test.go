@@ -286,3 +286,121 @@ func TestWriteCapDiffJSON(t *testing.T) {
 		t.Errorf("Expected 1 diff, got %d", len(decoded.Diffs))
 	}
 }
+
+func TestWriteCapabilitiesText(t *testing.T) {
+	caps := capability.CapabilitySet{}
+	caps.Add(capability.CapExec)
+
+	reports := []CapabilityReport{
+		{
+			Package:      "test/pkg",
+			Module:       "test",
+			Capabilities: caps,
+			RiskLevel:    "HIGH",
+		},
+	}
+
+	var buf bytes.Buffer
+	WriteCapabilities(&buf, reports)
+
+	output := buf.String()
+	if !strings.Contains(output, "test/pkg") {
+		t.Error("Expected output to contain package name")
+	}
+	if !strings.Contains(output, "exec") {
+		t.Error("Expected output to contain capability")
+	}
+}
+
+func TestWriteHealthText(t *testing.T) {
+	reports := []HealthReport{
+		{
+			Module:   "test",
+			Version:  "v1.0.0",
+			Score:    100,
+			CVECount: 0,
+			CVEs:     []string{},
+		},
+	}
+
+	var buf bytes.Buffer
+	WriteHealth(&buf, reports)
+
+	output := buf.String()
+	if !strings.Contains(output, "test") {
+		t.Error("Expected output to contain module name")
+	}
+	if !strings.Contains(output, "v1.0.0") {
+		t.Error("Expected output to contain version")
+	}
+}
+
+func TestWriteUpgradeText(t *testing.T) {
+	report := UpgradeReport{
+		Module: "test",
+		OldVer: "v1.0.0",
+		NewVer: "v2.0.0",
+		Risk:   "HIGH",
+	}
+
+	var buf bytes.Buffer
+	WriteUpgrade(&buf, report)
+
+	output := buf.String()
+	if !strings.Contains(output, "test") {
+		t.Error("Expected output to contain module name")
+	}
+	if !strings.Contains(output, "v1.0.0") || !strings.Contains(output, "v2.0.0") {
+		t.Error("Expected output to contain versions")
+	}
+}
+
+func TestWriteImpactText(t *testing.T) {
+	report := ImpactReport{
+		Module:           "test",
+		Version:          "v1.0.0",
+		AffectedPackages: []string{"dep1", "dep2"},
+	}
+
+	var buf bytes.Buffer
+	WriteImpact(&buf, report)
+
+	output := buf.String()
+	if !strings.Contains(output, "test") {
+		t.Error("Expected output to contain module name")
+	}
+	if !strings.Contains(output, "dep1") {
+		t.Error("Expected output to contain dependent")
+	}
+}
+
+func TestWriteScanSARIF(t *testing.T) {
+	caps := capability.CapabilitySet{}
+	caps.Add(capability.CapExec)
+
+	report := ScanReport{
+		Capabilities: []CapabilityReport{
+			{
+				Package:      "test/pkg",
+				Module:       "test",
+				Capabilities: caps,
+				RiskLevel:    "HIGH",
+			},
+		},
+	}
+
+	var buf bytes.Buffer
+	err := WriteScanSARIF(&buf, report)
+	if err != nil {
+		t.Fatalf("WriteScanSARIF() error = %v", err)
+	}
+
+	output := buf.String()
+	// SARIF is JSON format
+	if !strings.Contains(output, "\"version\"") {
+		t.Error("Expected SARIF output to contain version")
+	}
+	if !strings.Contains(output, "\"results\"") {
+		t.Error("Expected SARIF output to contain results")
+	}
+}
