@@ -1,0 +1,64 @@
+#!/usr/bin/env bash
+set -e
+
+echo "🔍 Running pre-push checks..."
+
+# 1. Run linters
+echo "📝 Running golangci-lint..."
+if ! golangci-lint run; then
+    echo "❌ Linting failed. Please fix errors before pushing."
+    exit 1
+fi
+
+# 2. Run tests
+echo "🧪 Running tests..."
+if ! go test -short ./...; then
+    echo "❌ Tests failed. Please fix failing tests before pushing."
+    exit 1
+fi
+
+# 3. Run gorisk scan to ensure no new HIGH risks
+echo "🛡️  Running gorisk self-scan..."
+if command -v gorisk &> /dev/null; then
+    if ! gorisk scan --policy .gorisk-policy.json --fail-on high > /dev/null 2>&1; then
+        echo "❌ Gorisk scan failed (HIGH risk detected). Please review security issues."
+        exit 1
+    fi
+else
+    echo "⚠️  gorisk not found, skipping security scan"
+fi
+
+# 4. Check commit messages format (last 10 commits being pushed)
+echo "📋 Checking commit messages..."
+while read local_ref local_sha remote_ref remote_sha; do
+    if [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
+        if [ "$remote_sha" = "0000000000000000000000000000000000000000" ]; then
+            # New branch, check last 10 commits
+            range="HEAD~10..HEAD"
+        else
+            # Existing branch, check commits being pushed
+            range="$remote_sha..$local_sha"
+        fi
+
+        # Check commit message format (conventional commits style)
+        git log --format=%s "$range" | while read -r msg; do
+            # Allow merge commits
+            if [[ "$msg" =~ ^Merge ]]; then
+                continue
+            fi
+
+            # Check for conventional commit format: type(scope?): message
+            # OR allow simple messages starting with capital letter
+            if ! [[ "$msg" =~ ^(feat|fix|docs|style|refactor|perf|test|build|ci|chore|revert)(\(.+\))?:.+ ]] && \
+               ! [[ "$msg" =~ ^[A-Z].+ ]]; then
+                echo "❌ Invalid commit message format: '$msg'"
+                echo "   Expected: 'type(scope): message' or 'Message starting with capital'"
+                echo "   Types: feat, fix, docs, style, refactor, perf, test, build, ci, chore, revert"
+                exit 1
+            fi
+        done
+    fi
+done
+
+echo "✅ All pre-push checks passed!"
+exit 0
