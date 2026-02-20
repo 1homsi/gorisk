@@ -22,6 +22,10 @@ inputs:
     description: 'Language analyzer to use (auto|go|node)'
     required: false
     default: 'auto'
+  continue-on-error:
+    description: 'Continue workflow even if gorisk finds HIGH risk (true|false)'
+    required: false
+    default: 'false'
 
 outputs:
   passed:
@@ -58,7 +62,12 @@ runs:
           echo "passed=true" >> "$GITHUB_OUTPUT"
         else
           echo "passed=false" >> "$GITHUB_OUTPUT"
-          exit $EXIT
+          # Only fail the workflow if continue-on-error is false
+          if [ "${{ inputs['continue-on-error'] }}" != "true" ]; then
+            exit $EXIT
+          else
+            echo "⚠️ gorisk found issues but continue-on-error is enabled"
+          fi
         fi
 
     - name: Upload SARIF to GitHub Security
