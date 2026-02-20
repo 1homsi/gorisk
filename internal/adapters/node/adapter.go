@@ -185,15 +185,15 @@ func (a *Adapter) Load(dir string) (*graph.DependencyGraph, error) {
 	return g, nil
 }
 
-// runInterproceduralAnalysis builds a file-level call graph and runs the interprocedural engine.
-// For Node.js, we treat each package as a "file-level function" since we don't have AST-level analysis yet.
+// runInterproceduralAnalysis builds a function-level call graph and runs the interprocedural engine.
+// For Node.js, we now use AST-based function detection (funcdetector.go) for function-level analysis.
 func runInterproceduralAnalysis(g *graph.DependencyGraph) error {
-	// Build IRGraph from package dependencies
-	irGraph := buildNodeIRGraph(g)
+	// Build IRGraph from function-level analysis
+	irGraph := buildNodeFunctionIRGraph(g)
 
-	// Run interprocedural analysis with k=0 (context-insensitive, file-level)
+	// Run interprocedural analysis with k=1 (context-sensitive, function-level)
 	opts := interproc.DefaultOptions()
-	opts.ContextSensitivity = 0 // File-level, no context sensitivity
+	opts.ContextSensitivity = 1 // Function-level with callsite context
 
 	_, _, err := interproc.RunAnalysis(irGraph, opts)
 	if err != nil {
@@ -205,54 +205,58 @@ func runInterproceduralAnalysis(g *graph.DependencyGraph) error {
 	return nil
 }
 
-// buildNodeIRGraph converts the package dependency graph into an IRGraph.
-// Each package becomes a "function" node, and dependencies become call edges.
-func buildNodeIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+// buildNodeFunctionIRGraph converts packages into a function-level IRGraph.
+// Uses funcdetector.go to parse JavaScript/TypeScript and build a function-level call graph.
+func buildNodeFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
 	irGraph := ir.IRGraph{
 		Functions: make(map[string]ir.FunctionCaps),
 		Calls:     []ir.CallEdge{},
 	}
 
-	// Create a function node for each package
-	for pkgPath, pkg := range g.Packages {
-		symbol := ir.Symbol{
-			Package: "",      // All in same "package" for Node.js
-			Name:    pkgPath, // Use package name as function name
-			Kind:    "package",
+	// Analyze each package's source files for functions
+	for _, pkg := range g.Packages {
+		if pkg.Dir == "" {
+			continue
 		}
 
-		funcCaps := ir.FunctionCaps{
-			Symbol:     symbol,
-			DirectCaps: pkg.Capabilities,
-			Depth:      0,
+		// Find JavaScript/TypeScript files
+		jsFiles, err := filepath.Glob(filepath.Join(pkg.Dir, "*.js"))
+		if err != nil {
+			continue
+		}
+		tsFiles, err := filepath.Glob(filepath.Join(pkg.Dir, "*.ts"))
+		if err == nil {
+			jsFiles = append(jsFiles, tsFiles...)
 		}
 
-		irGraph.Functions[symbol.String()] = funcCaps
+		if len(jsFiles) == 0 {
+			continue
+		}
+
+		// Extract just filenames for DetectFunctions
+		var fileNames []string
+		for _, fpath := range jsFiles {
+			fileNames = append(fileNames, filepath.Base(fpath))
+		}
+
+		// Detect functions in this package
+		funcs, edges, err := DetectFunctions(pkg.Dir, fileNames)
+		if err != nil {
+			interproc.Warnf("[node] Failed to detect functions in %s: %v", pkg.ImportPath, err)
+			continue
+		}
+
+		// Add functions to IRGraph
+		for key, fc := range funcs {
+			irGraph.Functions[key] = fc
+		}
+
+		// Add call edges
+		irGraph.Calls = append(irGraph.Calls, edges...)
 	}
 
-	// Create call edges from package dependencies
-	for pkgPath, deps := range g.Edges {
-		callerSymbol := ir.Symbol{
-			Package: "",
-			Name:    pkgPath,
-			Kind:    "package",
-		}
-
-		for _, depPath := range deps {
-			calleeSymbol := ir.Symbol{
-				Package: "",
-				Name:    depPath,
-				Kind:    "package",
-			}
-
-			edge := ir.CallEdge{
-				Caller: callerSymbol,
-				Callee: calleeSymbol,
-			}
-
-			irGraph.Calls = append(irGraph.Calls, edge)
-		}
-	}
+	interproc.Infof("[node] Built function-level IR: %d functions, %d call edges",
+		len(irGraph.Functions), len(irGraph.Calls))
 
 	return irGraph
 }
