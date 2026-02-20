@@ -108,3 +108,102 @@ func TestCapDiffMultipleCapabilities(t *testing.T) {
 		t.Errorf("Added score = %d, expected >= 30 for multiple risky capabilities", diff.Added.Score)
 	}
 }
+
+func TestCapEscalated(t *testing.T) {
+	tests := []struct {
+		name     string
+		old      capability.CapabilitySet
+		new      capability.CapabilitySet
+		expected bool
+	}{
+		{
+			name:     "No change",
+			old:      capability.CapabilitySet{},
+			new:      capability.CapabilitySet{},
+			expected: false,
+		},
+		{
+			name: "High risk added",
+			old:  capability.CapabilitySet{},
+			new: func() capability.CapabilitySet {
+				cs := capability.CapabilitySet{}
+				cs.Add(capability.CapExec)
+				return cs
+			}(),
+			expected: true,
+		},
+		{
+			name: "Low risk added",
+			old:  capability.CapabilitySet{},
+			new: func() capability.CapabilitySet {
+				cs := capability.CapabilitySet{}
+				cs.Add(capability.CapCrypto)
+				return cs
+			}(),
+			expected: false,
+		},
+		{
+			name: "Score increases",
+			old: func() capability.CapabilitySet {
+				cs := capability.CapabilitySet{}
+				cs.Add(capability.CapCrypto)
+				return cs
+			}(),
+			new: func() capability.CapabilitySet {
+				cs := capability.CapabilitySet{}
+				cs.Add(capability.CapCrypto)
+				cs.Add(capability.CapExec)
+				return cs
+			}(),
+			expected: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := capEscalated(tt.old, tt.new)
+			if got != tt.expected {
+				t.Errorf("capEscalated() = %v, want %v", got, tt.expected)
+			}
+		})
+	}
+}
+
+func TestBuildDiffs(t *testing.T) {
+	oldCaps := make(map[string]capability.CapabilitySet)
+	oldExec := capability.CapabilitySet{}
+	oldExec.Add(capability.CapExec)
+	oldCaps["pkg1"] = oldExec
+
+	newCaps := make(map[string]capability.CapabilitySet)
+	newNetwork := capability.CapabilitySet{}
+	newNetwork.Add(capability.CapNetwork)
+	newCaps["pkg1"] = newNetwork
+	newExec := capability.CapabilitySet{}
+	newExec.Add(capability.CapExec)
+	newCaps["pkg2"] = newExec
+
+	diffs := buildDiffs(oldCaps, newCaps)
+
+	// Should have diffs for pkg1 (changed) and pkg2 (new)
+	if len(diffs) == 0 {
+		t.Error("Expected non-empty diffs")
+	}
+
+	// Verify pkg1 has both added (network) and removed (exec)
+	foundPkg1 := false
+	for _, d := range diffs {
+		if d.Package == "pkg1" {
+			foundPkg1 = true
+			if !d.Added.Has("network") {
+				t.Error("Expected pkg1 to have added network capability")
+			}
+			if !d.Removed.Has("exec") {
+				t.Error("Expected pkg1 to have removed exec capability")
+			}
+		}
+	}
+	if !foundPkg1 {
+		t.Error("Expected to find pkg1 in diffs")
+	}
+}

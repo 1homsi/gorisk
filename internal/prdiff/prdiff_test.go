@@ -107,3 +107,67 @@ func TestModuleDiffWithCapabilities(t *testing.T) {
 		t.Error("Expected CapEscalated = false")
 	}
 }
+
+func TestParsePackageJSONDepLine(t *testing.T) {
+	tests := []struct {
+		name        string
+		line        string
+		wantName    string
+		wantVersion string
+		wantOK      bool
+	}{
+		{
+			name:        "Valid dependency",
+			line:        `    "express": "^4.17.1",`,
+			wantName:    "express",
+			wantVersion: "4.17.1", // Function strips ^
+			wantOK:      true,
+		},
+		{
+			name:        "Valid without comma",
+			line:        `    "lodash": "4.17.21"`,
+			wantName:    "lodash",
+			wantVersion: "4.17.21",
+			wantOK:      true,
+		},
+		{
+			name:        "Scoped package",
+			line:        `    "@types/node": "^14.0.0",`,
+			wantName:    "@types/node",
+			wantVersion: "14.0.0", // Function strips ^
+			wantOK:      true,
+		},
+		{
+			name:   "Invalid - no colon",
+			line:   `    "invalid"`,
+			wantOK: false,
+		},
+		{
+			name:   "Invalid - not a dependency line",
+			line:   `  "scripts": {`,
+			wantOK: false,
+		},
+		{
+			name:   "Empty line",
+			line:   "",
+			wantOK: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			gotName, gotVersion, gotOK := parsePackageJSONDepLine(tt.line)
+			if gotOK != tt.wantOK {
+				t.Errorf("parsePackageJSONDepLine() ok = %v, want %v", gotOK, tt.wantOK)
+			}
+			if gotOK {
+				if gotName != tt.wantName {
+					t.Errorf("parsePackageJSONDepLine() name = %v, want %v", gotName, tt.wantName)
+				}
+				if gotVersion != tt.wantVersion {
+					t.Errorf("parsePackageJSONDepLine() version = %v, want %v", gotVersion, tt.wantVersion)
+				}
+			}
+		})
+	}
+}
