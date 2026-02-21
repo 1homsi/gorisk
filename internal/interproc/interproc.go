@@ -10,7 +10,7 @@ import (
 // AnalysisOptions configures the interprocedural analysis.
 type AnalysisOptions struct {
 	ContextSensitivity int    // k for k-CFA (default: 1)
-	MaxIterations      int    // Max fixpoint iterations (default: 1000)
+	MaxIterations      int    // Max fixpoint iterations (default: 5000)
 	EnableCache        bool   // Enable persistent caching (default: true)
 	CacheDir           string // Cache directory (default: $HOME/.cache/gorisk)
 }
@@ -19,7 +19,7 @@ type AnalysisOptions struct {
 func DefaultOptions() AnalysisOptions {
 	return AnalysisOptions{
 		ContextSensitivity: 1,
-		MaxIterations:      1000,
+		MaxIterations:      5000,
 		EnableCache:        true,
 		CacheDir:           "",
 	}
@@ -59,7 +59,7 @@ func RunAnalysis(irGraph ir.IRGraph, opts AnalysisOptions) (*ir.CSCallGraph, []t
 	// Step 4: Compute fixpoint with caching
 	maxIter := opts.MaxIterations
 	if maxIter <= 0 {
-		maxIter = 1000
+		maxIter = 5000
 	}
 
 	Infof("[analysis] Step 4: Computing fixpoint")

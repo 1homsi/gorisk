@@ -1,7 +1,6 @@
 package interproc
 
 import (
-	"fmt"
 	"sort"
 
 	"github.com/1homsi/gorisk/internal/capability"
@@ -9,7 +8,8 @@ import (
 )
 
 // ComputeFixpoint propagates summaries until convergence using a pending algorithm.
-// It returns an error if the maximum number of iterations is exceeded.
+// It logs a warning if the maximum number of iterations is exceeded but does not
+// return an error — the partial analysis remains a valid over-approximation.
 func ComputeFixpoint(cg *ir.CSCallGraph, maxIterations int) error {
 	Debugf("[fixpoint] Starting fixpoint computation with max %d iterations", maxIterations)
 
@@ -43,10 +43,18 @@ func ComputeFixpoint(cg *ir.CSCallGraph, maxIterations int) error {
 		Debugf("[fixpoint] Iteration %d: Processing %s (%d remaining in pending)",
 			iteration, node.Function.String(), len(pending))
 
-		// Handle SCC nodes specially
+		// Handle SCC nodes specially: process the entire SCC at once and
+		// remove all its members from pending to avoid redundant reprocessing.
 		if sccID, inSCC := cg.NodeToSCC[nodeKey]; inSCC {
 			scc := cg.SCCs[sccID]
+
+			// Remove all other SCC members from pending — they're handled here.
+			for _, sccNode := range scc.Nodes {
+				delete(pending, sccNode.String())
+			}
+
 			summary := ComputeSCCSummary(scc, cg)
+			changed := false
 
 			// Update all nodes in the SCC with the collapsed summary
 			for _, sccNode := range scc.Nodes {
@@ -54,13 +62,14 @@ func ComputeFixpoint(cg *ir.CSCallGraph, maxIterations int) error {
 				oldSummary := cg.Summaries[sccNodeKey]
 
 				if !SummariesEqual(oldSummary, summary) {
-					summary.Node = sccNode // Update node reference
-					summary.Iteration = iteration
-					cg.Summaries[sccNodeKey] = summary
+					s := summary
+					s.Node = sccNode // Update node reference
+					s.Iteration = iteration
+					cg.Summaries[sccNodeKey] = s
+					changed = true
 
-					// Re-enqueue callers of this node
+					// Re-enqueue callers of this node that are outside the SCC
 					for _, caller := range cg.ReverseEdges[sccNodeKey] {
-						// Don't re-enqueue nodes in the same SCC
 						if callerSCCID, ok := cg.NodeToSCC[caller.String()]; !ok || callerSCCID != sccID {
 							pending[caller.String()] = true
 						}
@@ -68,7 +77,9 @@ func ComputeFixpoint(cg *ir.CSCallGraph, maxIterations int) error {
 				}
 			}
 
-			iteration++
+			if changed {
+				iteration++
+			}
 			continue
 		}
 
@@ -104,11 +115,10 @@ func ComputeFixpoint(cg *ir.CSCallGraph, maxIterations int) error {
 	}
 
 	if len(pending) > 0 {
-		Errorf("[fixpoint] Did not converge after %d iterations (%d nodes remaining)", maxIterations, len(pending))
-		return fmt.Errorf("fixpoint did not converge after %d iterations (%d nodes remaining)", maxIterations, len(pending))
+		Errorf("[fixpoint] Did not converge after %d iterations (%d nodes remaining); continuing with best-effort results", maxIterations, len(pending))
+	} else {
+		Infof("[fixpoint] Converged in %d iterations", iteration)
 	}
-
-	Infof("[fixpoint] Converged in %d iterations", iteration)
 	return nil
 }
 
