@@ -19,12 +19,10 @@ import (
 )
 
 type PolicyException struct {
-	Package       string   `json:"package"`
-	Capabilities  []string `json:"capabilities"`
-	Taint         []string `json:"taint"`         // e.g. ["network→exec", "env→exec"]
-	Expires       string   `json:"expires"`       // ISO 8601 date "2026-06-01"
-	Justification string   `json:"justification"` // why this exception exists
-	Ticket        string   `json:"ticket"`        // optional ticket reference
+	Package      string   `json:"package"`
+	Capabilities []string `json:"capabilities"`
+	Taint        []string `json:"taint"`   // e.g. ["network→exec", "env→exec"]
+	Expires      string   `json:"expires"` // ISO 8601 date "2026-06-01"
 }
 
 type policy struct {
@@ -42,7 +40,6 @@ type policy struct {
 type exceptionStats struct {
 	Applied         int
 	Expired         int
-	MissingJustify  int
 	TaintSuppressed int
 }
 
@@ -154,9 +151,6 @@ func writeExceptionSummary(w *os.File, stats exceptionStats) {
 	}
 	if stats.Expired > 0 {
 		fmt.Fprintf(w, "Expired (not applied): %d\n", stats.Expired)
-	}
-	if stats.MissingJustify > 0 {
-		fmt.Fprintf(w, "Missing justification: %d\n", stats.MissingJustify)
 	}
 }
 
@@ -377,7 +371,7 @@ func Run(args []string) int {
 		fmt.Fprintf(os.Stdout, "graph checksum: %s\n\n", sr.GraphChecksum)
 		report.WriteScan(os.Stdout, sr)
 		// Print exception summary if any exceptions were configured
-		if exceptionStats.Applied > 0 || exceptionStats.Expired > 0 || exceptionStats.MissingJustify > 0 {
+		if exceptionStats.Applied > 0 || exceptionStats.Expired > 0 {
 			fmt.Fprintln(os.Stdout)
 			writeExceptionSummary(os.Stdout, exceptionStats)
 		}
