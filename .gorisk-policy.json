@@ -61,6 +61,7 @@
     "golang.org/x/tools/internal/event/label",
     "golang.org/x/tools/internal/gcimporter",
     "golang.org/x/tools/internal/gocommand",
+    "golang.org/x/tools/internal/pkgbits",
     "golang.org/x/tools/internal/typesinternal"
   ]
 }
