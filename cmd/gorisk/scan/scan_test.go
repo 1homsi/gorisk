@@ -14,14 +14,12 @@ import (
 func TestBuildExceptions(t *testing.T) {
 	allowExceptions := []PolicyException{
 		{
-			Package:       "test/pkg1",
-			Capabilities:  []string{"exec", "network"},
-			Justification: "test justification",
+			Package:      "test/pkg1",
+			Capabilities: []string{"exec", "network"},
 		},
 		{
-			Package:       "test/pkg2",
-			Taint:         []string{"network→exec", "env→exec"},
-			Justification: "taint test",
+			Package: "test/pkg2",
+			Taint:   []string{"network→exec", "env→exec"},
 		},
 	}
 
@@ -60,10 +58,9 @@ func TestBuildExceptionsExpired(t *testing.T) {
 
 	allowExceptions := []PolicyException{
 		{
-			Package:       "test/pkg",
-			Capabilities:  []string{"exec"},
-			Expires:       yesterday,
-			Justification: "expired exception",
+			Package:      "test/pkg",
+			Capabilities: []string{"exec"},
+			Expires:      yesterday,
 		},
 	}
 
@@ -79,32 +76,14 @@ func TestBuildExceptionsExpired(t *testing.T) {
 	}
 }
 
-func TestBuildExceptionsMissingJustification(t *testing.T) {
-	allowExceptions := []PolicyException{
-		{
-			Package:      "test/pkg",
-			Capabilities: []string{"exec"},
-			// No justification or ticket
-		},
-	}
-
-	_, _, stats := buildExceptions(allowExceptions)
-
-	// Exception should still be applied even without justification
-	if stats.Applied != 1 {
-		t.Errorf("expected exception to be applied even without justification, got %d applied", stats.Applied)
-	}
-}
-
 func TestBuildExceptionsValidExpiry(t *testing.T) {
 	tomorrow := time.Now().AddDate(0, 0, 1).Format("2006-01-02")
 
 	allowExceptions := []PolicyException{
 		{
-			Package:       "test/pkg",
-			Capabilities:  []string{"exec"},
-			Expires:       tomorrow,
-			Justification: "valid exception",
+			Package:      "test/pkg",
+			Capabilities: []string{"exec"},
+			Expires:      tomorrow,
 		},
 	}
 
@@ -235,7 +214,6 @@ func TestWriteExceptionSummary(t *testing.T) {
 		Applied:         3,
 		Expired:         1,
 		TaintSuppressed: 2,
-		MissingJustify:  1,
 	})
 	f.Close()
 
@@ -252,9 +230,6 @@ func TestWriteExceptionSummary(t *testing.T) {
 	}
 	if !strings.Contains(content, "Expired (not applied): 1") {
 		t.Errorf("want expired line, got: %s", content)
-	}
-	if !strings.Contains(content, "Missing justification: 1") {
-		t.Errorf("want missing-justification line, got: %s", content)
 	}
 }
 
