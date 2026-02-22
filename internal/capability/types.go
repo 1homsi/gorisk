@@ -181,6 +181,24 @@ func (cs CapabilitySet) RiskLevel() string {
 	}
 }
 
+// Without returns a new CapabilitySet that excludes the capabilities in excepts.
+// Used by the policy engine to filter excepted capabilities before composite scoring.
+func (cs CapabilitySet) Without(excepts map[string]bool) CapabilitySet {
+	var out CapabilitySet
+	for _, c := range cs.caps {
+		if !excepts[c] {
+			if evs, ok := cs.Evidence[c]; ok {
+				for _, ev := range evs {
+					out.AddWithEvidence(c, ev)
+				}
+			} else {
+				out.Add(c)
+			}
+		}
+	}
+	return out
+}
+
 // String returns a comma-separated list of capability names.
 func (cs CapabilitySet) String() string {
 	return strings.Join(cs.List(), ", ")

@@ -310,13 +310,19 @@ func Run(args []string) int {
 			continue
 		}
 
-		// Compute composite score for this package
+		// Compute composite score for this package.
+		// Filter out capability exceptions so allow_exceptions.capabilities
+		// reduces the effective score, not just bypasses deny_capabilities.
 		cveCount := 0
 		if pkg.Module != nil {
 			cveCount = moduleCVEs[pkg.Module.Path]
 		}
+		effectiveCaps := cr.Capabilities
+		if exCaps := exceptions[cr.Package]; len(exCaps) > 0 {
+			effectiveCaps = cr.Capabilities.Without(exCaps)
+		}
 		compositeScore := priority.Compute(
-			cr.Capabilities,
+			effectiveCaps,
 			nil, // reachability unknown for now
 			cveCount,
 			pkgTaints[cr.Package],
