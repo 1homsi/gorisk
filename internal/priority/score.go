@@ -91,3 +91,68 @@ func deriveLevel(composite float64) string {
 		return "LOW"
 	}
 }
+
+// FinalScore holds the additive multi-engine score breakdown.
+type FinalScore struct {
+	Semantic  float64 // cap_score × reach_mod × taint_mod
+	Diff      float64 // version-diff engine contribution (0 unless --base given)
+	Integrity float64 // integrity engine contribution
+	Topology  float64 // topology engine contribution
+	Final     float64 // sum of above, capped at 100
+	Level     string  // LOW / MEDIUM / HIGH
+}
+
+// ComputeFinal calculates the additive multi-engine final score.
+// The CVE modifier is intentionally omitted (requires OSV network call).
+//
+//   - caps: capability set for this package
+//   - reachable: nil = unknown, false = unreachable (0.5×), true = reachable (1.3×)
+//   - taintFindings: taint findings for this package
+//   - diffScore: per-package portion of the diff engine score (0 if --base not given)
+//   - integrityScore: per-package integrity contribution
+//   - topologyScore: project-wide topology score (shared across all packages)
+func ComputeFinal(
+	caps capability.CapabilitySet,
+	reachable *bool,
+	taintFindings []taint.TaintFinding,
+	diffScore, integrityScore, topologyScore float64,
+) FinalScore {
+	// Semantic: cap_score × reach_mod × taint_mod (no CVE)
+	reachMod := 1.0
+	if reachable != nil {
+		if *reachable {
+			reachMod = 1.3
+		} else {
+			reachMod = 0.5
+		}
+	}
+
+	taintMod := 1.0
+	for _, finding := range taintFindings {
+		switch finding.Risk {
+		case "HIGH":
+			taintMod += 0.25
+		case "MEDIUM":
+			taintMod += 0.15
+		}
+	}
+
+	semantic := float64(caps.Score) * reachMod * taintMod
+	if semantic > 100 {
+		semantic = 100
+	}
+
+	final := semantic + diffScore + integrityScore + topologyScore
+	if final > 100 {
+		final = 100
+	}
+
+	return FinalScore{
+		Semantic:  semantic,
+		Diff:      diffScore,
+		Integrity: integrityScore,
+		Topology:  topologyScore,
+		Final:     final,
+		Level:     deriveLevel(final),
+	}
+}

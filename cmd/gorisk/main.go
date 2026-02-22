@@ -6,15 +6,18 @@ import (
 
 	"github.com/1homsi/gorisk/cmd/gorisk/capabilities"
 	"github.com/1homsi/gorisk/cmd/gorisk/diff"
+	diffrisk "github.com/1homsi/gorisk/cmd/gorisk/diffrisk"
 	"github.com/1homsi/gorisk/cmd/gorisk/explain"
 	graphcmd "github.com/1homsi/gorisk/cmd/gorisk/graph"
 	"github.com/1homsi/gorisk/cmd/gorisk/history"
 	"github.com/1homsi/gorisk/cmd/gorisk/impact"
+	integritycmd "github.com/1homsi/gorisk/cmd/gorisk/integrity"
 	"github.com/1homsi/gorisk/cmd/gorisk/licenses"
 	goriskpr "github.com/1homsi/gorisk/cmd/gorisk/pr"
 	goriskreach "github.com/1homsi/gorisk/cmd/gorisk/reachability"
 	"github.com/1homsi/gorisk/cmd/gorisk/sbom"
 	"github.com/1homsi/gorisk/cmd/gorisk/scan"
+	topologycmd "github.com/1homsi/gorisk/cmd/gorisk/topology"
 	"github.com/1homsi/gorisk/cmd/gorisk/trace"
 	"github.com/1homsi/gorisk/cmd/gorisk/upgrade"
 	"github.com/1homsi/gorisk/cmd/gorisk/viz"
@@ -57,6 +60,12 @@ func main() {
 		os.Exit(trace.Run(os.Args[2:]))
 	case "history":
 		os.Exit(history.Run(os.Args[2:]))
+	case "diff-risk":
+		os.Exit(diffrisk.Run(os.Args[2:]))
+	case "topology":
+		os.Exit(topologycmd.Run(os.Args[2:]))
+	case "integrity":
+		os.Exit(integritycmd.Run(os.Args[2:]))
 	case "version":
 		fmt.Println(version)
 	default:
@@ -75,7 +84,7 @@ Usage:
   gorisk diff           [--json] <module@old> <module@new>
   gorisk upgrade        [--json] <module@version>
   gorisk impact         [--json] <module[@version]>
-  gorisk scan           [--json] [--sarif] [--fail-on low|medium|high] [--policy file.json] [--timings]
+  gorisk scan           [--json] [--sarif] [--fail-on low|medium|high] [--policy file.json] [--timings] [--online] [--base <ref>]
   gorisk reachability   [--json] [--min-risk low|medium|high] [--entry file] [--lang auto|go|node]
   gorisk pr             [--json] [--base ref] [--head ref]
   gorisk graph          [--json] [--min-risk low|medium|high] [pattern]
@@ -84,5 +93,8 @@ Usage:
   gorisk viz            [--min-risk low|medium|high] > graph.html
   gorisk trace          [--timeout 10s] [--json] <package> [args...]
   gorisk history        [record|diff|show|trend] [--json]
+  gorisk diff-risk      --base <ref|path> [--json] [--lang auto|go|node]
+  gorisk topology       [--json] [--lang auto|go|node]
+  gorisk integrity      [--json] [--lang auto|go|node]
   gorisk version`)
 }

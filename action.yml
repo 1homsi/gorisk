@@ -26,6 +26,10 @@ inputs:
     description: 'Continue workflow even if gorisk finds HIGH risk (true|false)'
     required: false
     default: 'false'
+  verbose:
+    description: 'Enable verbose debug logging from the interprocedural analysis engine'
+    required: false
+    default: 'false'
 
 outputs:
   passed:
@@ -52,6 +56,10 @@ runs:
         SCAN_ARGS="--fail-on ${{ inputs.fail-on }}"
         if [ -n "${{ inputs['policy-file'] }}" ]; then
           SCAN_ARGS="$SCAN_ARGS --policy ${{ inputs['policy-file'] }}"
+        fi
+
+        if [ "${{ inputs.verbose }}" = "true" ]; then
+          SCAN_ARGS="$SCAN_ARGS --verbose"
         fi
 
         gorisk scan --sarif --lang ${{ inputs.lang }} $SCAN_ARGS > "$SARIF_FILE"

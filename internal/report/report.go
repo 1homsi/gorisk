@@ -2,6 +2,9 @@ package report
 
 import (
 	"github.com/1homsi/gorisk/internal/capability"
+	"github.com/1homsi/gorisk/internal/engines/integrity"
+	"github.com/1homsi/gorisk/internal/engines/topology"
+	"github.com/1homsi/gorisk/internal/engines/versiondiff"
 	"github.com/1homsi/gorisk/internal/taint"
 )
 
@@ -51,8 +54,11 @@ type ImpactReport struct {
 type ScanReport struct {
 	GraphChecksum string `json:"graph_checksum,omitempty"`
 	Capabilities  []CapabilityReport
-	Health        []HealthReport
-	TaintFindings []taint.TaintFinding `json:"taint_findings,omitempty"`
+	Health        []HealthReport             // only populated with --online
+	TaintFindings []taint.TaintFinding       `json:"taint_findings,omitempty"`
+	Topology      *topology.TopologyReport   `json:"topology,omitempty"`
+	Integrity     *integrity.IntegrityReport `json:"integrity,omitempty"`
+	VersionDiff   *versiondiff.DiffReport    `json:"version_diff,omitempty"`
 	Passed        bool
 	FailReason    string
 }

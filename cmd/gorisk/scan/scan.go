@@ -7,10 +7,14 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/1homsi/gorisk/internal/analyzer"
 	"github.com/1homsi/gorisk/internal/capability"
+	"github.com/1homsi/gorisk/internal/engines/integrity"
+	"github.com/1homsi/gorisk/internal/engines/topology"
+	"github.com/1homsi/gorisk/internal/engines/versiondiff"
 	"github.com/1homsi/gorisk/internal/health"
 	"github.com/1homsi/gorisk/internal/interproc"
 	"github.com/1homsi/gorisk/internal/priority"
@@ -44,10 +48,6 @@ type exceptionStats struct {
 }
 
 // buildExceptions processes policy exceptions with validation.
-// Returns:
-//   - exceptions: pkg → capability → bool (for capability exceptions)
-//   - taintExceptions: pkg → "source→sink" → bool (for taint exceptions)
-//   - stats: exception statistics for reporting
 func buildExceptions(allowExceptions []PolicyException) (
 	map[string]map[string]bool,
 	map[string]map[string]bool,
@@ -59,7 +59,6 @@ func buildExceptions(allowExceptions []PolicyException) (
 	var stats exceptionStats
 
 	for _, ex := range allowExceptions {
-		// Check expiry
 		expired := false
 		if ex.Expires != "" {
 			expiryDate, err := time.Parse("2006-01-02", ex.Expires)
@@ -74,15 +73,12 @@ func buildExceptions(allowExceptions []PolicyException) (
 			}
 		}
 
-		// Don't apply expired exceptions
 		if expired {
 			continue
 		}
 
-		// Track if this exception was applied
 		applied := false
 
-		// Add capability exceptions (merge if package already has exceptions)
 		if len(ex.Capabilities) > 0 {
 			caps, ok := exceptions[ex.Package]
 			if !ok {
@@ -95,7 +91,6 @@ func buildExceptions(allowExceptions []PolicyException) (
 			applied = true
 		}
 
-		// Add taint exceptions (merge if package already has exceptions)
 		if len(ex.Taint) > 0 {
 			taints, ok := taintExceptions[ex.Package]
 			if !ok {
@@ -117,7 +112,7 @@ func buildExceptions(allowExceptions []PolicyException) (
 	return exceptions, taintExceptions, stats
 }
 
-// filterTaintFindings removes taint findings that are suppressed by policy exceptions.
+// filterTaintFindings removes taint findings suppressed by policy exceptions.
 func filterTaintFindings(findings []taint.TaintFinding, taintExceptions map[string]map[string]bool) []taint.TaintFinding {
 	if len(taintExceptions) == 0 {
 		return findings
@@ -125,14 +120,11 @@ func filterTaintFindings(findings []taint.TaintFinding, taintExceptions map[stri
 
 	filtered := make([]taint.TaintFinding, 0, len(findings))
 	for _, f := range findings {
-		// Check if this package has taint exceptions
 		pkgExceptions, ok := taintExceptions[f.Package]
 		if !ok {
 			filtered = append(filtered, f)
 			continue
 		}
-
-		// Build the source→sink key
 		key := f.Source + "→" + f.Sink
 		if !pkgExceptions[key] {
 			filtered = append(filtered, f)
@@ -163,6 +155,8 @@ func Run(args []string) int {
 	lang := fs.String("lang", "auto", "language analyzer: auto|go|node")
 	timings := fs.Bool("timings", false, "print per-phase timing breakdown after output")
 	verbose := fs.Bool("verbose", false, "enable verbose debug logging")
+	online := fs.Bool("online", false, "enable health/CVE scoring via GitHub and OSV APIs")
+	base := fs.String("base", "", "compare against this git ref or lockfile path for diff-risk scoring")
 	fs.Parse(args)
 
 	dir, err := os.Getwd()
@@ -206,7 +200,6 @@ func Run(args []string) int {
 		excluded[pkg] = true
 	}
 
-	// Build exceptions with validation
 	exceptions, taintExceptions, exceptionStats := buildExceptions(p.AllowExceptions)
 
 	deniedCaps := make(map[string]bool)
@@ -220,7 +213,6 @@ func Run(args []string) int {
 		return 2
 	}
 
-	// Enable verbose logging if requested
 	if *verbose {
 		interproc.SetVerbose(true)
 		taint.SetVerbose(true)
@@ -260,23 +252,59 @@ func Run(args []string) int {
 	}
 	capDur := time.Since(t1)
 
-	// Phase: health scoring
+	// Phase: run engines concurrently
 	t2 := time.Now()
-	seen := make(map[string]bool)
-	var mods []health.ModuleRef
-	for _, mod := range g.Modules {
-		if mod.Main || seen[mod.Path] {
-			continue
+
+	var (
+		topoReport  topology.TopologyReport
+		integReport integrity.IntegrityReport
+		diffReport  versiondiff.DiffReport
+		wg          sync.WaitGroup
+	)
+
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		if tr, err := topology.Compute(dir, *lang); err == nil {
+			topoReport = tr
 		}
-		seen[mod.Path] = true
-		mods = append(mods, health.ModuleRef{Path: mod.Path, Version: mod.Version})
+	}()
+	go func() {
+		defer wg.Done()
+		if ir, err := integrity.Check(dir, *lang); err == nil {
+			integReport = ir
+		}
+	}()
+	if *base != "" {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if dr, err := versiondiff.Compute(dir, *base, *lang); err == nil {
+				diffReport = dr
+			}
+		}()
 	}
-	healthReports, healthTiming := health.ScoreAll(mods)
-	healthDur := time.Since(t2)
+
+	// Health scoring: only when --online
+	var healthReports []report.HealthReport
+	var healthTiming health.HealthTiming
+	if *online {
+		seen := make(map[string]bool)
+		var mods []health.ModuleRef
+		for _, mod := range g.Modules {
+			if mod.Main || seen[mod.Path] {
+				continue
+			}
+			seen[mod.Path] = true
+			mods = append(mods, health.ModuleRef{Path: mod.Path, Version: mod.Version})
+		}
+		healthReports, healthTiming = health.ScoreAll(mods)
+	}
+
+	wg.Wait()
+	engineDur := time.Since(t2)
 
 	taintFindings := taint.Analyze(g.Packages)
-
-	// Filter taint findings based on exceptions
 	filteredTaint := filterTaintFindings(taintFindings, taintExceptions)
 
 	sr := report.ScanReport{
@@ -284,22 +312,31 @@ func Run(args []string) int {
 		Capabilities:  capReports,
 		Health:        healthReports,
 		TaintFindings: filteredTaint,
+		Topology:      &topoReport,
+		Integrity:     &integReport,
 		Passed:        true,
+	}
+	if *base != "" {
+		sr.VersionDiff = &diffReport
 	}
 
 	failLevel := capability.RiskValue(*failOn)
 
-	// Build module→CVE count map for composite scoring
+	// Build module→CVE count map (only used when --online)
 	moduleCVEs := make(map[string]int)
 	for _, hr := range healthReports {
 		moduleCVEs[hr.Module] = hr.CVECount
 	}
 
-	// Build package→taint findings map for composite scoring
+	// Build package→taint findings map
 	pkgTaints := make(map[string][]taint.TaintFinding)
 	for _, tf := range filteredTaint {
 		pkgTaints[tf.Package] = append(pkgTaints[tf.Package], tf)
 	}
+
+	// Project-wide topology score is shared across all packages.
+	topoScore := topoReport.Score
+	integScore := integReport.Score
 
 	for _, cr := range capReports {
 		if excluded[cr.Package] {
@@ -310,28 +347,38 @@ func Run(args []string) int {
 			continue
 		}
 
-		// Compute composite score for this package.
-		// Filter out capability exceptions so allow_exceptions.capabilities
-		// reduces the effective score, not just bypasses deny_capabilities.
-		cveCount := 0
-		if pkg.Module != nil {
-			cveCount = moduleCVEs[pkg.Module.Path]
-		}
 		effectiveCaps := cr.Capabilities
 		if exCaps := exceptions[cr.Package]; len(exCaps) > 0 {
 			effectiveCaps = cr.Capabilities.Without(exCaps)
 		}
-		compositeScore := priority.Compute(
+
+		// Per-package diff score: sum of RiskDelta for this package name.
+		pkgDiffScore := 0.0
+		if *base != "" {
+			for _, pd := range diffReport.NewPackages {
+				if strings.HasPrefix(pd.Package, cr.Package+"@") || pd.Package == cr.Package {
+					pkgDiffScore += pd.RiskDelta
+				}
+			}
+			for _, pd := range diffReport.Escalations {
+				if strings.HasPrefix(pd.Package, cr.Package+"@") || pd.Package == cr.Package {
+					pkgDiffScore += pd.RiskDelta
+				}
+			}
+		}
+
+		finalScore := priority.ComputeFinal(
 			effectiveCaps,
-			nil, // reachability unknown for now
-			cveCount,
+			nil,
 			pkgTaints[cr.Package],
+			pkgDiffScore,
+			integScore,
+			topoScore,
 		)
 
-		// Use composite score level for fail evaluation
-		if capability.RiskValue(compositeScore.Level) >= failLevel {
+		if capability.RiskValue(finalScore.Level) >= failLevel {
 			sr.Passed = false
-			sr.FailReason = fmt.Sprintf("package %s has %s composite risk (score: %.1f)", cr.Package, compositeScore.Level, compositeScore.Composite)
+			sr.FailReason = fmt.Sprintf("package %s has %s risk (score: %.1f)", cr.Package, finalScore.Level, finalScore.Final)
 			break
 		}
 
@@ -350,7 +397,7 @@ func Run(args []string) int {
 		}
 	}
 
-	if sr.Passed {
+	if sr.Passed && *online {
 		for _, hr := range healthReports {
 			if p.BlockArchived && hr.Archived {
 				sr.Passed = false
@@ -376,7 +423,11 @@ func Run(args []string) int {
 	default:
 		fmt.Fprintf(os.Stdout, "graph checksum: %s\n\n", sr.GraphChecksum)
 		report.WriteScan(os.Stdout, sr)
-		// Print exception summary if any exceptions were configured
+		writeTopologySection(os.Stdout, &topoReport)
+		writeIntegritySection(os.Stdout, &integReport)
+		if *base != "" {
+			writeDiffSection(os.Stdout, &diffReport)
+		}
 		if exceptionStats.Applied > 0 || exceptionStats.Expired > 0 {
 			fmt.Fprintln(os.Stdout)
 			writeExceptionSummary(os.Stdout, exceptionStats)
@@ -390,15 +441,18 @@ func Run(args []string) int {
 	}
 
 	if *timings {
-		total := loadDur + capDur + healthDur + outDur
+		total := loadDur + capDur + engineDur + outDur
 		fmt.Fprintln(os.Stdout)
 		fmt.Fprintln(os.Stdout, "=== Timings ===")
 		fmt.Fprintf(os.Stdout, "%-25s  %s\n", "graph load", fmtDur(loadDur))
 		fmt.Fprintf(os.Stdout, "%-25s  %s\n", "capability detect", fmtDur(capDur))
-		fmt.Fprintf(os.Stdout, "%-25s  %s  (%d modules, %d workers)\n",
-			"health scoring", fmtDur(healthDur), healthTiming.ModuleCount, healthTiming.Workers)
-		fmt.Fprintf(os.Stdout, "  %-23s  %s  (%d calls)\n", "github API", fmtDur(healthTiming.GithubTime), healthTiming.GithubCalls)
-		fmt.Fprintf(os.Stdout, "  %-23s  %s  (%d calls)\n", "osv API", fmtDur(healthTiming.OsvTime), healthTiming.OsvCalls)
+		fmt.Fprintf(os.Stdout, "%-25s  %s\n", "engines (parallel)", fmtDur(engineDur))
+		if *online {
+			fmt.Fprintf(os.Stdout, "  %-23s  (%d modules, %d workers)\n",
+				"health scoring", healthTiming.ModuleCount, healthTiming.Workers)
+			fmt.Fprintf(os.Stdout, "  %-23s  %s  (%d calls)\n", "github API", fmtDur(healthTiming.GithubTime), healthTiming.GithubCalls)
+			fmt.Fprintf(os.Stdout, "  %-23s  %s  (%d calls)\n", "osv API", fmtDur(healthTiming.OsvTime), healthTiming.OsvCalls)
+		}
 		fmt.Fprintf(os.Stdout, "%-25s  %s\n", "output formatting", fmtDur(outDur))
 		fmt.Fprintln(os.Stdout, strings.Repeat("─", 40))
 		fmt.Fprintf(os.Stdout, "%-25s  %s\n", "total", fmtDur(total))
@@ -408,6 +462,56 @@ func Run(args []string) int {
 		return 1
 	}
 	return 0
+}
+
+func writeTopologySection(w *os.File, r *topology.TopologyReport) {
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "=== Topology ===")
+	fmt.Fprintf(w, "Direct deps: %d   Total: %d   MaxDepth: %d\n",
+		r.DirectDeps, r.TotalDeps, r.MaxDepth)
+	fmt.Fprintf(w, "DeepPackagePct: %.1f%%   MajorVersionSkew: %d   DuplicateVersions: %d   LockfileChurn(90d): %d\n",
+		r.DeepPackagePct, r.MajorVersionSkew, r.DuplicateVersions, r.LockfileChurn)
+	fmt.Fprintf(w, "%-22s  %6s  %5s\n", "Signal", "Value", "Score")
+	fmt.Fprintln(w, strings.Repeat("─", 38))
+	for _, s := range r.Signals {
+		fmt.Fprintf(w, "%-22s  %6d  %5.1f\n", s.Name, s.Value, s.Score)
+	}
+	fmt.Fprintf(w, "%-22s  %6s  %5.1f\n", "TOTAL", "", r.Score)
+}
+
+func writeIntegritySection(w *os.File, r *integrity.IntegrityReport) {
+	fmt.Fprintln(w)
+	fmt.Fprintln(w, "=== Integrity ===")
+	fmt.Fprintf(w, "Packages: %d   Coverage: %.1f%%   Score: %.1f\n",
+		r.TotalPackages, r.Coverage, r.Score)
+	if len(r.Violations) > 0 {
+		fmt.Fprintf(w, "%-40s  %-20s  %5s\n", "Package", "Type", "Score")
+		fmt.Fprintln(w, strings.Repeat("─", 70))
+		for _, v := range r.Violations {
+			fmt.Fprintf(w, "%-40s  %-20s  %5.1f\n", v.Package, v.Type, v.Score)
+		}
+	}
+}
+
+func writeDiffSection(w *os.File, r *versiondiff.DiffReport) {
+	fmt.Fprintln(w)
+	fmt.Fprintf(w, "=== Version Diff (base: %s) ===\n", r.Base)
+	fmt.Fprintf(w, "New packages: %d   Escalations: %d   Score: %.1f\n",
+		len(r.NewPackages), len(r.Escalations), r.Score)
+	if len(r.NewPackages) > 0 {
+		fmt.Fprintln(w, "\nNew packages:")
+		fmt.Fprintf(w, "  %-45s  %-10s  %5s\n", "Package", "Change", "Delta")
+		for _, pd := range r.NewPackages {
+			fmt.Fprintf(w, "  %-45s  %-10s  %5.1f\n", pd.Package, pd.ChangeType, pd.RiskDelta)
+		}
+	}
+	if len(r.Escalations) > 0 {
+		fmt.Fprintln(w, "\nEscalations:")
+		fmt.Fprintf(w, "  %-45s  %-10s  %5s\n", "Package", "Change", "Delta")
+		for _, pd := range r.Escalations {
+			fmt.Fprintf(w, "  %-45s  %-10s  %5.1f\n", pd.Package, pd.ChangeType, pd.RiskDelta)
+		}
+	}
 }
 
 func fmtDur(d time.Duration) string {
