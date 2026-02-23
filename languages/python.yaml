@@ -1,0 +1,232 @@
+# Capability patterns for Python
+#
+# Covers import statements and call-site patterns matched in .py source files.
+# Import patterns are matched against the top-level module name (e.g. "subprocess").
+# Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+#
+# To add a pattern: append an entry to imports or call_sites and open a PR.
+
+name: python
+
+# import_patterns: Python module name (top-level) → capabilities granted
+imports:
+  # ── Process execution ──────────────────────────────────────────────────────
+  subprocess:           [exec]
+  os:                   [fs:read, fs:write, env, exec]
+  sys:                  [reflect, env]
+  signal:               [exec]
+  pty:                  [exec]
+  pexpect:              [exec]
+
+  # ── Filesystem ─────────────────────────────────────────────────────────────
+  io:                   [fs:read, fs:write]
+  pathlib:              [fs:read, fs:write]
+  shutil:               [fs:read, fs:write]
+  tempfile:             [fs:write]
+  glob:                 [fs:read]
+  fnmatch:              [fs:read]
+  fileinput:            [fs:read]
+  csv:                  [fs:read, fs:write]
+  configparser:         [fs:read, fs:write]
+  zipfile:              [fs:read, fs:write]
+  tarfile:              [fs:read, fs:write]
+  gzip:                 [fs:read, fs:write]
+  bz2:                  [fs:read, fs:write]
+  lzma:                 [fs:read, fs:write]
+
+  # ── Network ────────────────────────────────────────────────────────────────
+  socket:               [network]
+  ssl:                  [network, crypto]
+  http:                 [network]
+  http.client:          [network]
+  http.server:          [network]
+  urllib:               [network]
+  urllib.request:       [network]
+  urllib.parse:         [network]
+  urllib3:              [network]
+  ftplib:               [network]
+  smtplib:              [network]
+  imaplib:              [network]
+  poplib:               [network]
+  xmlrpc:               [network]
+  xmlrpc.client:        [network]
+  asyncio:              [network]
+  aiohttp:              [network]
+  requests:             [network]
+  httpx:                [network]
+  httplib2:             [network]
+  websocket:            [network]
+  websockets:           [network]
+  paramiko:             [network, crypto]
+  fabric:               [network, exec]
+  boto3:                [network, fs:read, fs:write]
+  botocore:             [network]
+  google.cloud:         [network, fs:read, fs:write]
+  azure:                [network, fs:read, fs:write]
+  twilio:               [network]
+  sendgrid:             [network]
+  stripe:               [network]
+
+  # ── Database ───────────────────────────────────────────────────────────────
+  sqlite3:              [network, fs:read, fs:write]
+  psycopg2:             [network]
+  pymysql:              [network]
+  pymongo:              [network]
+  redis:                [network]
+  motor:                [network]
+  sqlalchemy:           [network]
+  databases:            [network]
+  aioredis:             [network]
+
+  # ── Cryptography ───────────────────────────────────────────────────────────
+  hashlib:              [crypto]
+  hmac:                 [crypto]
+  secrets:              [crypto]
+  cryptography:         [crypto]
+  Crypto:               [crypto]
+  nacl:                 [crypto]
+  jwt:                  [crypto]
+  bcrypt:               [crypto]
+  passlib:              [crypto]
+
+  # ── Unsafe / dynamic code ──────────────────────────────────────────────────
+  pickle:               [unsafe]
+  cPickle:              [unsafe]
+  marshal:              [unsafe]
+  shelve:               [unsafe]
+  ctypes:               [unsafe]
+  cffi:                 [unsafe]
+  mmap:                 [unsafe]
+  ast:                  [unsafe]
+
+  # ── Environment ────────────────────────────────────────────────────────────
+  dotenv:               [env]
+  python-dotenv:        [env]
+
+  # ── Reflection / introspection ─────────────────────────────────────────────
+  inspect:              [reflect]
+  types:                [reflect]
+  typing:               [reflect]
+  dis:                  [reflect]
+  gc:                   [reflect, unsafe]
+  weakref:              [reflect]
+
+  # ── Plugin / dynamic loading ───────────────────────────────────────────────
+  importlib:            [plugin]
+  importlib.util:       [plugin]
+  importlib.machinery:  [plugin]
+  imp:                  [plugin]
+  pkgutil:              [plugin]
+  site:                 [plugin]
+
+  # ── Web frameworks (network) ───────────────────────────────────────────────
+  flask:                [network]
+  django:               [network, fs:read, fs:write]
+  fastapi:              [network]
+  starlette:            [network]
+  tornado:              [network]
+  sanic:                [network]
+  bottle:               [network]
+  cherrypy:             [network]
+  gunicorn:             [network, exec]
+  uvicorn:              [network, exec]
+
+# call_sites: substring patterns matched against each source line
+call_sites:
+  # ── Process execution ──────────────────────────────────────────────────────
+  "subprocess.run(":          [exec]
+  "subprocess.Popen(":        [exec]
+  "subprocess.call(":         [exec]
+  "subprocess.check_call(":   [exec]
+  "subprocess.check_output(": [exec]
+  "os.system(":               [exec]
+  "os.popen(":                [exec]
+  "os.execv(":                [exec]
+  "os.execve(":               [exec]
+  "os.execvp(":               [exec]
+  "os.spawnl(":               [exec]
+  "os.spawnle(":              [exec]
+  "os.fork(":                 [exec]
+  "commands.getoutput(":      [exec]
+  "commands.getstatusoutput(": [exec]
+
+  # ── Unsafe / code evaluation ───────────────────────────────────────────────
+  "eval(":                    [unsafe]
+  "exec(":                    [unsafe]
+  "compile(":                 [unsafe]
+  "pickle.loads(":            [unsafe]
+  "pickle.load(":             [unsafe]
+  "marshal.loads(":           [unsafe]
+  "ctypes.cdll.":             [unsafe]
+  "ctypes.windll.":           [unsafe]
+  "__import__(":              [plugin]
+
+  # ── Filesystem reads ───────────────────────────────────────────────────────
+  "open(":                    [fs:read]
+  "os.open(":                 [fs:read]
+  "os.read(":                 [fs:read]
+  "os.listdir(":              [fs:read]
+  "os.scandir(":              [fs:read]
+  "os.walk(":                 [fs:read]
+  "os.stat(":                 [fs:read]
+  "os.lstat(":                [fs:read]
+  "os.access(":               [fs:read]
+  "os.getcwd(":               [fs:read]
+  "pathlib.Path(":            [fs:read]
+
+  # ── Filesystem writes ──────────────────────────────────────────────────────
+  "os.write(":                [fs:write]
+  "os.mkdir(":                [fs:write]
+  "os.makedirs(":             [fs:write]
+  "os.remove(":               [fs:write]
+  "os.unlink(":               [fs:write]
+  "os.rmdir(":                [fs:write]
+  "os.rename(":               [fs:write]
+  "os.replace(":              [fs:write]
+  "os.chmod(":                [fs:write]
+  "os.chown(":                [fs:write]
+  "os.symlink(":              [fs:write]
+  "os.link(":                 [fs:write]
+  "os.truncate(":             [fs:write]
+  "shutil.copy(":             [fs:write]
+  "shutil.move(":             [fs:write]
+  "shutil.rmtree(":           [fs:write]
+
+  # ── Environment ────────────────────────────────────────────────────────────
+  "os.getenv(":               [env]
+  "os.environ[":              [env]
+  "os.environ.get(":          [env]
+  "os.putenv(":               [env]
+  "os.unsetenv(":             [env]
+
+  # ── Network ────────────────────────────────────────────────────────────────
+  "socket.connect(":          [network]
+  "socket.socket(":           [network]
+  "requests.get(":            [network]
+  "requests.post(":           [network]
+  "requests.put(":            [network]
+  "requests.delete(":         [network]
+  "requests.patch(":          [network]
+  "requests.head(":           [network]
+  "requests.Session(":        [network]
+  "httpx.get(":               [network]
+  "httpx.post(":              [network]
+  "httpx.Client(":            [network]
+  "urllib.request.urlopen(":  [network]
+  "urllib.request.urlretrieve(": [network]
+
+  # ── Cryptography ───────────────────────────────────────────────────────────
+  "hashlib.md5(":             [crypto]
+  "hashlib.sha1(":            [crypto]
+  "hashlib.sha256(":          [crypto]
+  "hashlib.sha512(":          [crypto]
+  "hashlib.new(":             [crypto]
+  "secrets.token_hex(":       [crypto]
+  "secrets.token_bytes(":     [crypto]
+  "secrets.token_urlsafe(":   [crypto]
+
+  # ── Dynamic import ─────────────────────────────────────────────────────────
+  "importlib.import_module(": [plugin]
+  "importlib.util.spec_from_file_location(": [plugin]

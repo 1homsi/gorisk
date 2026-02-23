@@ -1,0 +1,8 @@
+{
+  "name": "test/php-simple",
+  "description": "Minimal PHP fixture for golden tests",
+  "require": {
+    "php": "^8.0",
+    "monolog/monolog": "^3.0"
+  }
+}

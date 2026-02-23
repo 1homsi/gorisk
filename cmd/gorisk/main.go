@@ -11,6 +11,7 @@ import (
 	graphcmd "github.com/1homsi/gorisk/cmd/gorisk/graph"
 	"github.com/1homsi/gorisk/cmd/gorisk/history"
 	"github.com/1homsi/gorisk/cmd/gorisk/impact"
+	initcmd "github.com/1homsi/gorisk/cmd/gorisk/init"
 	integritycmd "github.com/1homsi/gorisk/cmd/gorisk/integrity"
 	"github.com/1homsi/gorisk/cmd/gorisk/licenses"
 	goriskpr "github.com/1homsi/gorisk/cmd/gorisk/pr"
@@ -66,6 +67,8 @@ func main() {
 		os.Exit(topologycmd.Run(os.Args[2:]))
 	case "integrity":
 		os.Exit(integritycmd.Run(os.Args[2:]))
+	case "init":
+		os.Exit(initcmd.Run(os.Args[2:]))
 	case "version":
 		fmt.Println(version)
 	default:
@@ -96,5 +99,6 @@ Usage:
   gorisk diff-risk      --base <ref|path> [--json] [--lang auto|go|node]
   gorisk topology       [--json] [--lang auto|go|node]
   gorisk integrity      [--json] [--lang auto|go|node]
+  gorisk init           [--force] [--stdout]
   gorisk version`)
 }

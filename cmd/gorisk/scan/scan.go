@@ -30,16 +30,26 @@ type PolicyException struct {
 	Expires      string   `json:"expires"` // ISO 8601 date "2026-06-01"
 }
 
+// PolicySuppress holds suppression rules that silence findings matching specific
+// criteria without removing them from the graph entirely.
+type PolicySuppress struct {
+	ByFilePattern   []string `json:"by_file_pattern"`   // e.g. ["vendor/**", "test/**"]
+	ByModule        []string `json:"by_module"`         // e.g. ["github.com/test/*"]
+	ByCapabilityVia []string `json:"by_capability_via"` // e.g. ["import"]
+}
+
 type policy struct {
-	Version          int               `json:"version"`
-	FailOn           string            `json:"fail_on"`
-	MaxHealthScore   int               `json:"max_health_score"`
-	MinHealthScore   int               `json:"min_health_score"`
-	BlockArchived    bool              `json:"block_archived"`
-	DenyCapabilities []string          `json:"deny_capabilities"`
-	AllowExceptions  []PolicyException `json:"allow_exceptions"`
-	MaxDepDepth      int               `json:"max_dep_depth"`
-	ExcludePackages  []string          `json:"exclude_packages"`
+	Version             int               `json:"version"`
+	FailOn              string            `json:"fail_on"`
+	MaxHealthScore      int               `json:"max_health_score"`
+	MinHealthScore      int               `json:"min_health_score"`
+	BlockArchived       bool              `json:"block_archived"`
+	DenyCapabilities    []string          `json:"deny_capabilities"`
+	AllowExceptions     []PolicyException `json:"allow_exceptions"`
+	MaxDepDepth         int               `json:"max_dep_depth"`
+	ExcludePackages     []string          `json:"exclude_packages"`
+	ConfidenceThreshold float64           `json:"confidence_threshold"` // default 0.0 = no filter
+	Suppress            PolicySuppress    `json:"suppress"`
 }
 
 type exceptionStats struct {
@@ -111,6 +121,51 @@ func buildExceptions(allowExceptions []PolicyException) (
 	}
 
 	return exceptions, taintExceptions, stats
+}
+
+// filterTaintByConfidence removes taint findings below the given confidence threshold.
+func filterTaintByConfidence(findings []taint.TaintFinding, threshold float64) []taint.TaintFinding {
+	if threshold <= 0 {
+		return findings
+	}
+	out := make([]taint.TaintFinding, 0, len(findings))
+	for _, f := range findings {
+		if f.Confidence >= threshold {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// filterCapsConfidence returns a new CapabilitySet with capabilities whose
+// recorded evidence confidence is below threshold removed.  Capabilities that
+// have no evidence (confidence == 0) are kept for backward compatibility.
+func filterCapsConfidence(caps capability.CapabilitySet, threshold float64) capability.CapabilitySet {
+	if threshold <= 0 {
+		return caps
+	}
+	excepts := make(map[string]bool)
+	for _, c := range caps.List() {
+		conf := caps.Confidence(c)
+		if conf > 0 && conf < threshold {
+			excepts[c] = true
+		}
+	}
+	if len(excepts) == 0 {
+		return caps
+	}
+	return caps.Without(excepts)
+}
+
+// suppressedByPolicy reports whether a package (or its module) should be
+// silenced by the suppress rules in the policy.
+func suppressedByPolicy(pkg string, mod string, suppress PolicySuppress) bool {
+	for _, pattern := range suppress.ByModule {
+		if matchPattern(mod, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 // filterTaintFindings removes taint findings suppressed by policy exceptions.
@@ -309,6 +364,9 @@ func Run(args []string) int {
 		taintFindings = astResult.Bundle.TaintFindings
 	}
 	filteredTaint := filterTaintFindings(taintFindings, taintExceptions)
+	if p.ConfidenceThreshold > 0 {
+		filteredTaint = filterTaintByConfidence(filteredTaint, p.ConfidenceThreshold)
+	}
 
 	sr := report.ScanReport{
 		GraphChecksum: g.Checksum(),
@@ -350,9 +408,18 @@ func Run(args []string) int {
 			continue
 		}
 
+		// Apply suppress.by_module: skip packages whose module is suppressed.
+		if suppressedByPolicy(cr.Package, pkg.Module.Path, p.Suppress) {
+			continue
+		}
+
 		effectiveCaps := cr.Capabilities
 		if exCaps := exceptions[cr.Package]; len(exCaps) > 0 {
 			effectiveCaps = cr.Capabilities.Without(exCaps)
+		}
+		// Apply confidence threshold filter after exceptions.
+		if p.ConfidenceThreshold > 0 {
+			effectiveCaps = filterCapsConfidence(effectiveCaps, p.ConfidenceThreshold)
 		}
 
 		// Per-package diff score: sum of RiskDelta for this package name.
@@ -529,16 +596,22 @@ func writeDiffSection(w *os.File, r *versiondiff.DiffReport) {
 // Exact patterns match only the exact package path.
 func isExcluded(pkg string, patterns []string) bool {
 	for _, p := range patterns {
-		if strings.HasSuffix(p, "/*") {
-			prefix := strings.TrimSuffix(p, "/*")
-			if pkg == prefix || strings.HasPrefix(pkg, prefix+"/") {
-				return true
-			}
-		} else if pkg == p {
+		if matchPattern(pkg, p) {
 			return true
 		}
 	}
 	return false
+}
+
+// matchPattern reports whether subject matches pattern.
+// Patterns ending with "/*" match the exact prefix or any sub-path.
+// Exact patterns require an exact string match.
+func matchPattern(subject, pattern string) bool {
+	if strings.HasSuffix(pattern, "/*") {
+		prefix := strings.TrimSuffix(pattern, "/*")
+		return subject == prefix || strings.HasPrefix(subject, prefix+"/")
+	}
+	return subject == pattern
 }
 
 func fmtDur(d time.Duration) string {

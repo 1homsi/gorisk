@@ -1,0 +1,8 @@
+{
+  "name": "node-simple",
+  "version": "1.0.0",
+  "description": "Minimal Node fixture for golden tests",
+  "dependencies": {
+    "ms": "2.1.3"
+  }
+}

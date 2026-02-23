@@ -1,0 +1,30 @@
+{
+  "_readme": [
+    "This file is @generated automatically"
+  ],
+  "content-hash": "abc123",
+  "packages": [
+    {
+      "name": "monolog/monolog",
+      "version": "3.5.0",
+      "type": "library",
+      "require": {
+        "php": ">=8.1",
+        "psr/log": "^2.0 || ^3.0"
+      }
+    },
+    {
+      "name": "psr/log",
+      "version": "3.0.0",
+      "type": "library",
+      "require": {
+        "php": ">=8.0"
+      }
+    }
+  ],
+  "packages-dev": [],
+  "minimum-stability": "stable",
+  "stability-flags": {},
+  "prefer-stable": true,
+  "prefer-lowest": false
+}

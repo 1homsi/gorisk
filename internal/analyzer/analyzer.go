@@ -8,6 +8,7 @@ import (
 	goadapter "github.com/1homsi/gorisk/internal/adapters/go"
 	nodeadapter "github.com/1homsi/gorisk/internal/adapters/node"
 	phpadapter "github.com/1homsi/gorisk/internal/adapters/php"
+	pythonadapter "github.com/1homsi/gorisk/internal/adapters/python"
 	"github.com/1homsi/gorisk/internal/graph"
 	"github.com/1homsi/gorisk/internal/prdiff"
 	"github.com/1homsi/gorisk/internal/reachability"
@@ -41,10 +42,11 @@ var registry = map[string]LangFeatures{
 		PRDiff:       prdiff.PHPDiffer{},
 		Reachability: reachability.PHPAnalyzer{},
 	},
+	"python": {},
 }
 
 // FeaturesFor returns the feature implementations for the given language.
-// lang may be "auto", "go", "node", or "php".
+// lang may be "auto", "go", "node", "php", or "python".
 func FeaturesFor(lang, dir string) (LangFeatures, error) {
 	if lang == "auto" || lang == "" {
 		lang = detect(dir)
@@ -54,7 +56,7 @@ func FeaturesFor(lang, dir string) (LangFeatures, error) {
 	}
 	f, ok := registry[lang]
 	if !ok {
-		return LangFeatures{}, fmt.Errorf("unknown language %q; choose auto|go|node|php", lang)
+		return LangFeatures{}, fmt.Errorf("unknown language %q; choose auto|go|node|php|python", lang)
 	}
 	return f, nil
 }
@@ -66,8 +68,8 @@ type Analyzer interface {
 }
 
 // ForLang returns an Analyzer for the given language specifier.
-// lang may be "auto", "go", "node", or "php".
-// "auto" detects from go.mod / package.json / composer.json presence.
+// lang may be "auto", "go", "node", "php", or "python".
+// "auto" detects from go.mod / package.json / composer.json / requirements.txt presence.
 func ForLang(lang, dir string) (Analyzer, error) {
 	if lang == "auto" {
 		lang = detect(dir)
@@ -79,10 +81,12 @@ func ForLang(lang, dir string) (Analyzer, error) {
 		return &nodeadapter.Adapter{}, nil
 	case "php":
 		return &phpadapter.Adapter{}, nil
+	case "python":
+		return &pythonadapter.Adapter{}, nil
 	case "multi":
 		return &multiAnalyzer{}, nil
 	default:
-		return nil, fmt.Errorf("unknown language %q; choose auto|go|node|php", lang)
+		return nil, fmt.Errorf("unknown language %q; choose auto|go|node|php|python", lang)
 	}
 }
 
@@ -91,6 +95,11 @@ func detect(dir string) string {
 	hasPkgJSON := fileExists(filepath.Join(dir, "package.json"))
 	hasComposerJSON := fileExists(filepath.Join(dir, "composer.json"))
 	hasComposerLock := fileExists(filepath.Join(dir, "composer.lock"))
+	hasPyprojectTOML := fileExists(filepath.Join(dir, "pyproject.toml"))
+	hasPoetryLock := fileExists(filepath.Join(dir, "poetry.lock"))
+	hasPipfileLock := fileExists(filepath.Join(dir, "Pipfile.lock"))
+	hasRequirementsTxt := fileExists(filepath.Join(dir, "requirements.txt"))
+	isPython := hasPyprojectTOML || hasPoetryLock || hasPipfileLock || hasRequirementsTxt
 	switch {
 	case hasGoMod && hasPkgJSON:
 		return "multi"
@@ -100,6 +109,8 @@ func detect(dir string) string {
 		return "node"
 	case hasComposerJSON || hasComposerLock:
 		return "php"
+	case isPython:
+		return "python"
 	default:
 		return "go"
 	}

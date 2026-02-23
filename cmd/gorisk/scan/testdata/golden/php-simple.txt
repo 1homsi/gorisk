@@ -1,0 +1,28 @@
+graph checksum: <omitted>
+
+[1m[36m=== Capability Report ===[0m
+
+[1mPACKAGE          MODULE           CAPABILITIES                         SCORE  RISK  [0m
+──────────────────────────────────────────────────────────────────────────────────
+monolog/monolog  monolog/monolog  fs:write, network                       25  [33mMEDIUM[0m
+psr/log          psr/log                                                   0  [32mLOW   [0m
+test/php-simple  test/php-simple                                           0  [32mLOW   [0m
+
+[1m[36m=== Health Report ===[0m
+
+
+[1m[36m=== Taint Flows ===[0m
+
+  [33mMEDIUM[0m  monolog/monolog  network → fs:write  network data written to disk [conf: 0.90]
+
+[1m[32m✓ PASSED[0m
+
+=== Topology ===
+Direct deps: 0   Total: 0   MaxDepth: 0
+DeepPackagePct: 0.0%   MajorVersionSkew: 0   DuplicateVersions: 0   LockfileChurn(90d): 0
+Signal                   Value  Score
+──────────────────────────────────────
+TOTAL                             0.0
+
+=== Integrity ===
+Packages: 0   Coverage: 0.0%   Score: 0.0

@@ -1,0 +1,28 @@
+graph checksum: <omitted>
+
+[1m[36m=== Capability Report ===[0m
+
+[1mPACKAGE      MODULE       CAPABILITIES                         SCORE  RISK  [0m
+──────────────────────────────────────────────────────────────────────────
+ms           ms                                                    0  [32mLOW   [0m
+node-simple  node-simple                                           0  [32mLOW   [0m
+
+[1m[36m=== Health Report ===[0m
+
+
+[1m[32m✓ PASSED[0m
+
+=== Topology ===
+Direct deps: 1   Total: 1   MaxDepth: 1
+DeepPackagePct: 0.0%   MajorVersionSkew: 0   DuplicateVersions: 0   LockfileChurn(90d): 0
+Signal                   Value  Score
+──────────────────────────────────────
+DirectDeps                   1    0.0
+DeepPackagePct               0    0.0
+MajorVersionSkew             0    0.0
+DuplicateVersions            0    0.0
+LockfileChurn                0    0.0
+TOTAL                             0.0
+
+=== Integrity ===
+Packages: 1   Coverage: 100.0%   Score: 0.0

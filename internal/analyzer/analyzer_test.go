@@ -94,8 +94,13 @@ func TestForLang(t *testing.T) {
 			expectName: "node",
 		},
 		{
+			name:       "explicit python",
+			lang:       "python",
+			expectName: "python",
+		},
+		{
 			name:        "invalid language",
-			lang:        "python",
+			lang:        "rust",
 			expectError: true,
 		},
 		{
