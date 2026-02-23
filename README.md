@@ -19,16 +19,16 @@ Maps what your dependencies *can do* — network access, exec, filesystem writes
 
 Key differentiators:
 
-- **Polyglot** — pluggable `Analyzer` interface; ships with Go, Node.js, PHP (Composer/Laravel), Python, Rust, Java, and Ruby.
+- **Polyglot** — 22 languages: Go, Node.js, PHP, Python, Rust, Java, Ruby, C#/.NET, Dart, Swift, Elixir, Kotlin, Scala, C/C++, Haskell, Clojure, Erlang, OCaml, Julia, R, Perl, Lua. Every language supports the full feature suite — scan, reachability, upgrade intelligence, PR diff.
 - **Capability detection** — detect which packages can read files, make network calls, spawn processes, or use `unsafe`/`eval`. Know *what your dependencies can do* before they're in production.
-- **Evidence + confidence** — every capability detection is backed by file path, line number, match context, and a confidence score (import = 90%, call site = 60%, install script = 85%).
+- **Evidence + confidence** — every capability detection is backed by file path, line number, match context, and a confidence score (import = 90%, call site = 75%, install script = 85%).
 - **Capability diff** — compare two versions of a dependency and detect capability escalation. If `v1.2.3 → v1.3.0` quietly added `exec` or `network`, gorisk flags it as a supply chain risk signal.
 - **Deterministic output** — all output is sorted; every scan produces a short SHA-256 graph checksum so CI can detect silent graph changes between runs.
 - **CVE listing** — full list of OSV vulnerability IDs per module, not just a count.
 - **Blast radius** — simulate removing a module and see exactly which packages and binaries break, plus LOC impact.
-- **Upgrade risk** — diff exported symbols between versions to detect breaking API changes before you upgrade.
+- **Upgrade risk** — diff exported symbols between versions (Go) or lockfile versions (all other languages) to detect breaking API changes before you upgrade.
 - **Health scoring** — combines commit activity, release cadence, archived status, and CVE count into a single score (parallel, 10 workers).
-- **Reachability** — prove a capability is reachable from `main` via callgraph (Go) or import graph (Node.js). Supports `--entry` to target a specific binary.
+- **Reachability** — prove a capability is reachable from `main` via callgraph (Go) or import graph (all other languages). Supports `--entry` to target a specific binary.
 - **History + trend** — snapshot risk over time, diff between snapshots, view score sparklines per module.
 - **CI-native** — SARIF output compatible with GitHub Code Scanning. Exit codes for policy gating. `--timings` flag for build profiling.
 
@@ -50,28 +50,50 @@ gorisk auto-detects the language from the project directory. Use `--lang` to ove
 gorisk scan              # auto-detect
 gorisk scan --lang go    # force Go
 gorisk scan --lang node  # force Node.js
-gorisk scan --lang php   # force PHP
+gorisk scan --lang python
+gorisk scan --lang java
+gorisk scan --lang rust
+# ... any --lang value from the table below
 ```
 
 When both `go.mod` and `package.json` are present (monorepo), both analyzers run and their dependency graphs are merged.
 
 ### Supported languages
 
-| Language | `--lang` | Status | Detection signal | Lockfile / manifest |
-|----------|----------|--------|-----------------|---------------------|
-| **Go** | `go` | ✅ stable | `go.mod` | `go.mod` + `go list` |
-| **Node.js** | `node` | ✅ stable | `package.json` | `package-lock.json` v1/v2/v3, `yarn.lock`, `pnpm-lock.yaml`; npm/yarn/pnpm workspaces |
-| **PHP** | `php` | ✅ stable | `composer.json` / `composer.lock` | `composer.lock`; Laravel, Symfony, and bare Composer projects |
-| **Python** | `python` | ✅ stable | `pyproject.toml` / `requirements.txt` | `poetry.lock`, `Pipfile.lock`, `requirements.txt`, `pyproject.toml` |
-| **Rust** | `rust` | ✅ stable | `Cargo.toml` | `Cargo.lock`, `Cargo.toml` |
-| **Java** | `java` | ✅ stable | `pom.xml` / `build.gradle` | `pom.xml`, `gradle.lockfile`, `build.gradle` |
-| **Ruby** | `ruby` | ✅ stable | `Gemfile` / `Gemfile.lock` | `Gemfile.lock`, `Gemfile` |
-| **C#/.NET** | `dotnet` | ✅ stable | `packages.lock.json` / `*.csproj` | NuGet `packages.lock.json`, `.csproj` PackageReference |
-| **Dart/Flutter** | `dart` | ✅ stable | `pubspec.lock` / `pubspec.yaml` | `pubspec.lock`, `pubspec.yaml` |
-| **Swift** | `swift` | ✅ stable | `Package.resolved` / `Package.swift` | `Package.resolved` v1/v2/v3, `Package.swift` |
-| **Elixir** | `elixir` | ✅ stable | `mix.lock` / `mix.exs` | `mix.lock`, `mix.exs` |
+All 22 languages support: `scan`, `capabilities`, `explain`, `graph`, `reachability`, `upgrade`, `pr`, `sbom`, `licenses`, `viz`, `history`, `impact`, and `trace`.
 
-Want to add a language? The `Analyzer` interface is a single `Load(dir string) (*graph.DependencyGraph, error)` method — see [Contributing](#contributing).
+**Depth legend:**
+- ✅ **Full** — deep AST + interprocedural callgraph analysis; function-level capability propagation
+- ✅ **Standard** — import/call-site pattern scanning; lockfile-based upgrade and PR diff; import-graph reachability
+
+| Language | `--lang` | Analysis depth | Detection signal | Lockfile / manifest |
+|----------|----------|---------------|-----------------|---------------------|
+| **Go** | `go` | ✅ Full | `go.mod` | `go.mod` + `go list`; `go.work` workspace |
+| **Node.js** | `node` | ✅ Full | `package.json` | `package-lock.json` v1/v2/v3, `yarn.lock`, `pnpm-lock.yaml`; npm/yarn/pnpm workspaces |
+| **PHP** | `php` | ✅ Full | `composer.json` / `composer.lock` | `composer.lock`; Laravel, Symfony, bare Composer |
+| **Python** | `python` | ✅ Standard | `pyproject.toml` / `requirements.txt` | `poetry.lock`, `Pipfile.lock`, `requirements.txt`, `pyproject.toml` |
+| **Java** | `java` | ✅ Standard | `pom.xml` / `build.gradle` | `pom.xml`, `gradle.lockfile`, `build.gradle` / `build.gradle.kts` |
+| **Rust** | `rust` | ✅ Standard | `Cargo.toml` | `Cargo.lock`, `Cargo.toml` |
+| **Ruby** | `ruby` | ✅ Standard | `Gemfile` / `Gemfile.lock` | `Gemfile.lock`, `Gemfile` |
+| **C#/.NET** | `dotnet` | ✅ Standard | `packages.lock.json` / `*.csproj` | NuGet `packages.lock.json`, `.csproj` PackageReference |
+| **Dart/Flutter** | `dart` | ✅ Standard | `pubspec.lock` / `pubspec.yaml` | `pubspec.lock`, `pubspec.yaml` |
+| **Swift** | `swift` | ✅ Standard | `Package.resolved` / `Package.swift` | `Package.resolved` v1/v2/v3, `Package.swift` |
+| **Elixir** | `elixir` | ✅ Standard | `mix.lock` / `mix.exs` | `mix.lock`, `mix.exs` |
+| **Kotlin** | `kotlin` | ✅ Standard | `libs.versions.toml` / `build.gradle.kts` | `gradle/libs.versions.toml`, `build.gradle.kts`, `build.gradle` |
+| **Scala** | `scala` | ✅ Standard | `build.sbt` | `build.sbt` |
+| **C/C++** | `cpp` | ✅ Standard | `vcpkg.json` / `conanfile.py` | `vcpkg.json`, `conanfile.py`, `conanfile.txt` |
+| **Haskell** | `haskell` | ✅ Standard | `cabal.project.freeze` / `stack.yaml.lock` | `cabal.project.freeze`, `stack.yaml.lock`, `*.cabal` |
+| **Clojure** | `clojure` | ✅ Standard | `deps.edn` / `project.clj` | `deps.edn` (tools.deps), `project.clj` (Leiningen) |
+| **Erlang/OTP** | `erlang` | ✅ Standard | `rebar.lock` / `rebar.config` | `rebar.lock`, `rebar.config` |
+| **OCaml** | `ocaml` | ✅ Standard | `*.opam.locked` / `opam.locked` | `*.opam.locked`, `opam.locked`, `*.opam` |
+| **Julia** | `julia` | ✅ Standard | `Manifest.toml` | `Manifest.toml`, `Project.toml` |
+| **R** | `r` | ✅ Standard | `renv.lock` / `DESCRIPTION` | `renv.lock`, `DESCRIPTION` |
+| **Perl** | `perl` | ✅ Standard | `cpanfile.snapshot` / `cpanfile` | `cpanfile.snapshot` (Carton), `cpanfile` |
+| **Lua** | `lua` | ✅ Standard | `luarocks.lock` / `*.rockspec` | `luarocks.lock`, `*.rockspec` |
+
+> **Deep AST analysis** (Go/Node/PHP) resolves interprocedural call chains across package boundaries — gorisk traces `main()` → helper → os/exec and scores the capability at each hop with confidence decay. **Standard analysis** uses import-level and call-site pattern matching within source files, which is accurate for direct usage but does not trace through wrapper functions.
+
+Want to add a language? See [Contributing](#contributing).
 
 ---
 
@@ -353,8 +375,10 @@ golang.org/x/net/http2           golang.org/x/net                 network       
 
 Proves whether risky capabilities are **actually reachable** from your code — not just present in a transitive dependency.
 
-- **Go**: uses SSA callgraph analysis (Rapid Type Analysis) starting from all `main()` and `init()` functions.
-- **Node.js**: traces `require`/`import`/`import()` paths from your project source files through the full dependency graph.
+- **Go**: SSA callgraph analysis (Rapid Type Analysis) from all `main()` and `init()` functions — resolves interprocedural call chains.
+- **Node.js**: traces `require`/`import`/`import()` paths from project source files through the full dependency graph.
+- **PHP**: traces `use` statements from project source files.
+- **All other languages**: import-graph reachability — scans your source files for import/use/require statements and determines which packages from the lockfile are actually imported.
 
 ```bash
 # Analyze all entrypoints
@@ -1066,68 +1090,65 @@ make test
 
 ## Contributing
 
-Adding a new language requires two steps:
+Adding a new language requires two steps. gorisk already ships 22 languages — use any existing adapter (e.g. `internal/adapters/ruby/`) as a reference.
 
-### 1. Graph loader — `internal/adapters/<lang>/adapter.go`
+### 1. Graph loader — `internal/adapters/<lang>/`
 
-Implement the `Analyzer` interface:
+Four files:
 
-```go
-type Analyzer interface {
-    Name() string
-    Load(dir string) (*graph.DependencyGraph, error)
-}
-```
+| File | Purpose |
+|------|---------|
+| `adapter.go` | Implements `Analyzer` interface (`Name()` + `Load(dir)`) |
+| `lockfile.go` | Parses the language's lockfile / manifest into a `*graph.DependencyGraph` |
+| `capability.go` | Scans source files for capability patterns; returns `capability.CapabilitySet` |
+| `<lang>_test.go` | Unit tests — lockfile parsing + capability detection |
 
-Register it in `internal/analyzer/analyzer.go` → `ForLang()` switch and add a detection signal to `detect()`.
+Register in `internal/analyzer/analyzer.go` → `ForLang()` switch + `detect()` + `registry` map.
 
-To add capability evidence, call `CapabilitySet.AddWithEvidence(cap, CapabilityEvidence{...})` instead of `Add()`:
+To record capability evidence:
 
 ```go
 cs.AddWithEvidence(capability.CapExec, capability.CapabilityEvidence{
     File:       filePath,
     Line:       lineNo,
-    Context:    "exec.Command(",
+    Context:    "subprocess.run(",
     Via:        "callSite",
-    Confidence: 0.60,
+    Confidence: 0.75,
 })
 ```
 
 ### 2. Feature implementations
 
-Each feature package defines an interface + per-language structs:
+One file each in three packages:
 
-| Package | Interface | Example impl |
-|---------|-----------|--------------|
-| `internal/reachability` | `Analyzer` | `GoAnalyzer`, `NodeAnalyzer` |
-| `internal/upgrade` | `Upgrader` | `GoUpgrader`, `NodeUpgrader` |
-| `internal/upgrade` | `CapDiffer` | `GoCapDiffer`, `NodeCapDiffer` |
-| `internal/prdiff` | `Differ` | `GoDiffer`, `NodeDiffer` |
+| File | Interface | What it does |
+|------|-----------|--------------|
+| `internal/upgrade/<lang>.go` | `Upgrader` + `CapDiffer` | Reads current version from lockfile; returns upgrade risk report |
+| `internal/prdiff/<lang>.go` | `Differ` | Diffs the lockfile between two git refs; returns added/updated/removed packages |
+| `internal/reachability/<lang>.go` | `Analyzer` | Scans source files for imports; matches against loaded packages |
 
-The `reachability.Analyzer` interface has two methods:
-
-```go
-type Analyzer interface {
-    Analyze(dir string) ([]ReachabilityReport, error)
-    AnalyzeFrom(dir, entryFile string) ([]ReachabilityReport, error)
-}
-```
-
-`Analyze` should call `AnalyzeFrom(dir, "")`.
-
-Register everything in `internal/analyzer/analyzer.go`:
+Register all four in `internal/analyzer/analyzer.go`:
 
 ```go
-var registry = map[string]LangFeatures{
-    "go":   { ... },
-    "node": { ... },
-    "rust": {  // your new entry
-        Upgrade:      upgrade.RustUpgrader{},
-        CapDiff:      upgrade.RustCapDiffer{},
-        PRDiff:       prdiff.RustDiffer{},
-        Reachability: reachability.RustAnalyzer{},
-    },
-}
+"mylang": {
+    Upgrade:      upgrade.MyLangUpgrader{},
+    CapDiff:      upgrade.MyLangCapDiffer{},
+    PRDiff:       prdiff.MyLangDiffer{},
+    Reachability: reachability.MyLangAnalyzer{},
+},
 ```
 
-The capability taxonomy, all output formats, explain evidence, history tracking, and CLI flags come for free.
+The capability taxonomy, scoring, all output formats, explain evidence, history tracking, policy enforcement, and CLI flags all work automatically.
+
+### What's not yet implemented
+
+The following features have full implementations only for **Go, Node.js, and PHP**. All other languages fall back to simpler (but still correct) alternatives:
+
+| Feature | Go / Node / PHP | All other languages |
+|---------|----------------|---------------------|
+| **Capability detection** | Deep AST + interprocedural callgraph; traces `main()` → helper → dangerous call | Import-level + call-site pattern scanning within source files |
+| **Upgrade analysis** | Symbol-level diff of exported API (Go: `go list -m`; Node: npm download) | Lockfile version comparison; no cross-version capability download |
+| **Reachability** | Full callgraph (Go: SSA/RTA; Node: module graph BFS) | Import-graph: packages directly imported by your source files |
+| **PR diff capabilities** | Downloads new package version and re-scans for capability changes | Reports package version changes only; no re-scan of new version |
+
+Contributions welcome to bring any language to Full depth.
