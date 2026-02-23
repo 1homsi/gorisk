@@ -23,7 +23,14 @@ type JavaPackage struct {
 
 // Load detects and parses the Java dependency lockfile in dir.
 // Detection order: pom.xml → build.gradle / gradle.lockfile
-func Load(dir string) ([]JavaPackage, error) {
+// Load never panics; it returns a structured error on failure.
+func Load(dir string) (pkgs []JavaPackage, retErr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			retErr = fmt.Errorf("java.Load %s: recovered from panic: %v", dir, r)
+		}
+	}()
+
 	switch {
 	case fileExists(filepath.Join(dir, "pom.xml")):
 		return loadPomXML(dir)
@@ -59,14 +66,18 @@ type pomDependency struct {
 }
 
 func loadPomXML(dir string) ([]JavaPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "pom.xml"))
+	path := filepath.Join(dir, "pom.xml")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read pom.xml: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	var proj pomProject
 	if err := xml.Unmarshal(data, &proj); err != nil {
-		return nil, fmt.Errorf("parse pom.xml: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
 	var packages []JavaPackage
@@ -93,14 +104,20 @@ func loadPomXML(dir string) ([]JavaPackage, error) {
 // gradle.lockfile format: group:artifact:version=config1,config2
 // Lines starting with '#' or 'empty=' are skipped.
 func loadGradleLock(dir string) ([]JavaPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "gradle.lockfile"))
+	path := filepath.Join(dir, "gradle.lockfile")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read gradle.lockfile: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	var packages []JavaPackage
+	lineNo := 0
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
+		lineNo++
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "empty=") {
 			continue
@@ -114,6 +131,9 @@ func loadGradleLock(dir string) ([]JavaPackage, error) {
 		groupID := parts[0]
 		artifactID := parts[1]
 		version := parts[2]
+		if groupID == "" || artifactID == "" {
+			continue
+		}
 		name := groupID + "/" + artifactID
 		packages = append(packages, JavaPackage{
 			Name:       name,
@@ -122,6 +142,9 @@ func loadGradleLock(dir string) ([]JavaPackage, error) {
 			Version:    version,
 			Direct:     true,
 		})
+	}
+	if err := scanner.Err(); err != nil {
+		return packages, fmt.Errorf("parse %s line %d: %w", path, lineNo, err)
 	}
 	return packages, nil
 }
@@ -142,14 +165,19 @@ func loadGradleBuild(dir string) ([]JavaPackage, error) {
 	}
 	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read %s: %w", filepath.Base(path), err)
+		return nil, fmt.Errorf("parse %s: %w", filepath.Base(path), err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	var packages []JavaPackage
 	seen := make(map[string]bool)
 
+	lineNo := 0
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
+		lineNo++
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "//") {
 			continue
@@ -165,6 +193,9 @@ func loadGradleBuild(dir string) ([]JavaPackage, error) {
 		}
 		groupID := parts[0]
 		artifactID := parts[1]
+		if groupID == "" || artifactID == "" {
+			continue
+		}
 		version := ""
 		if len(parts) >= 3 {
 			version = parts[2]
@@ -181,6 +212,9 @@ func loadGradleBuild(dir string) ([]JavaPackage, error) {
 			Version:    version,
 			Direct:     true,
 		})
+	}
+	if err := scanner.Err(); err != nil {
+		return packages, fmt.Errorf("parse %s line %d: %w", filepath.Base(path), lineNo, err)
 	}
 	return packages, nil
 }

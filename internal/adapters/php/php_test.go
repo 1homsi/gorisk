@@ -383,3 +383,100 @@ func TestReadComposerJSONName(t *testing.T) {
 		t.Errorf("readComposerJSONName = %q, want vendor/project", name)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// Malformed / empty input tests — verify no panic and graceful handling
+// ---------------------------------------------------------------------------
+
+func TestLoadComposerLockEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "composer.lock"), []byte{}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load() unexpected error for empty composer.lock: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Errorf("expected 0 packages for empty file, got %d", len(pkgs))
+	}
+}
+
+func TestLoadComposerLockMalformed(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "composer.lock"), []byte(`{not valid json`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := Load(dir)
+	if err == nil {
+		t.Error("expected error for malformed composer.lock, got nil")
+	}
+}
+
+func TestLoadComposerLockMissingPackagesKey(t *testing.T) {
+	// composer.lock with no "packages" key — should return empty slice, not error.
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "composer.lock"), []byte(`{"minimum-stability":"stable"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load() unexpected error for composer.lock without packages key: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Errorf("expected 0 packages, got %d", len(pkgs))
+	}
+}
+
+func TestLoadComposerLockDevDepsIncluded(t *testing.T) {
+	// Verify that packages-dev entries are included in the result.
+	dir := t.TempDir()
+	lock := `{
+  "packages": [
+    {"name": "guzzlehttp/guzzle", "version": "7.0.0", "require": {}}
+  ],
+  "packages-dev": [
+    {"name": "phpunit/phpunit", "version": "10.0.0", "require": {}}
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(dir, "composer.lock"), []byte(lock), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	byName := make(map[string]ComposerPackage)
+	for _, p := range pkgs {
+		byName[p.Name] = p
+	}
+	if _, ok := byName["guzzlehttp/guzzle"]; !ok {
+		t.Error("expected guzzlehttp/guzzle (production dep)")
+	}
+	if _, ok := byName["phpunit/phpunit"]; !ok {
+		t.Error("expected phpunit/phpunit (dev dep)")
+	}
+}
+
+func TestLoadComposerLockOnlyDevDeps(t *testing.T) {
+	// composer.lock with missing "packages" key but present "packages-dev".
+	dir := t.TempDir()
+	lock := `{
+  "packages-dev": [
+    {"name": "phpunit/phpunit", "version": "10.0.0", "require": {}}
+  ]
+}`
+	if err := os.WriteFile(filepath.Join(dir, "composer.lock"), []byte(lock), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := Load(dir)
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if len(pkgs) != 1 {
+		t.Errorf("expected 1 package (dev dep only), got %d", len(pkgs))
+	}
+	if pkgs[0].Name != "phpunit/phpunit" {
+		t.Errorf("expected phpunit/phpunit, got %q", pkgs[0].Name)
+	}
+}

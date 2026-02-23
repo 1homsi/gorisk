@@ -20,7 +20,14 @@ type RubyPackage struct {
 
 // Load detects and parses the Ruby dependency lockfile in dir.
 // Tries Gemfile.lock first, then falls back to Gemfile.
-func Load(dir string) ([]RubyPackage, error) {
+// Load never panics; it returns a structured error on failure.
+func Load(dir string) (pkgs []RubyPackage, retErr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			retErr = fmt.Errorf("ruby.Load %s: recovered from panic: %v", dir, r)
+		}
+	}()
+
 	switch {
 	case fileExists(filepath.Join(dir, "Gemfile.lock")):
 		return loadGemfileLock(dir)
@@ -46,9 +53,13 @@ func Load(dir string) ([]RubyPackage, error) {
 //	DEPENDENCIES
 //	  rails (~> 7.1.0)
 func loadGemfileLock(dir string) ([]RubyPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "Gemfile.lock"))
+	path := filepath.Join(dir, "Gemfile.lock")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read Gemfile.lock: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	directDeps := readGemfileDirectDeps(dir)
@@ -66,8 +77,10 @@ func loadGemfileLock(dir string) ([]RubyPackage, error) {
 	section := sectionNone
 	var curPkg *RubyPackage
 
+	lineNo := 0
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
+		lineNo++
 		line := scanner.Text()
 		trimmed := strings.TrimSpace(line)
 
@@ -104,12 +117,12 @@ func loadGemfileLock(dir string) ([]RubyPackage, error) {
 				if name == "" {
 					continue
 				}
-				pkg := &RubyPackage{
+				pkg := RubyPackage{
 					Name:    name,
 					Version: version,
 					Direct:  directDeps[name],
 				}
-				packages = append(packages, *pkg)
+				packages = append(packages, pkg)
 				byName[name] = &packages[len(packages)-1]
 				curPkg = byName[name]
 				continue
@@ -132,6 +145,9 @@ func loadGemfileLock(dir string) ([]RubyPackage, error) {
 				byName[depName].Direct = true
 			}
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return packages, fmt.Errorf("parse %s line %d: %w", path, lineNo, err)
 	}
 
 	return packages, nil
@@ -183,16 +199,22 @@ func leadingSpaces(line string) int {
 // loadGemfile parses a Gemfile for gem declarations.
 // Handles: gem 'name', gem 'name', '~> version', gem "name"
 func loadGemfile(dir string) ([]RubyPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "Gemfile"))
+	path := filepath.Join(dir, "Gemfile")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read Gemfile: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	var packages []RubyPackage
 	seen := make(map[string]bool)
 
+	lineNo := 0
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
+		lineNo++
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -211,12 +233,18 @@ func loadGemfile(dir string) ([]RubyPackage, error) {
 			Direct:  true,
 		})
 	}
+	if err := scanner.Err(); err != nil {
+		return packages, fmt.Errorf("parse %s line %d: %w", path, lineNo, err)
+	}
 	return packages, nil
 }
 
 // parseGemfileLine extracts the gem name and optional version from a Gemfile
 // "gem ..." line.
 func parseGemfileLine(line string) (name, version string) {
+	if len(line) < 4 {
+		return "", ""
+	}
 	// Strip "gem " prefix.
 	rest := strings.TrimSpace(line[4:])
 	// Split by comma to get individual arguments.

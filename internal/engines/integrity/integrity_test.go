@@ -505,3 +505,64 @@ packages:
 		t.Errorf("expected path_dep violation, got: %v", r.Violations)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// parseGoSum malformed / empty input tests
+// ---------------------------------------------------------------------------
+
+func TestParseGoSumEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "go.sum"), []byte{}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	seen, err := parseGoSum(dir)
+	if err != nil {
+		t.Fatalf("parseGoSum() unexpected error for empty file: %v", err)
+	}
+	if len(seen) != 0 {
+		t.Errorf("expected 0 entries for empty go.sum, got %d", len(seen))
+	}
+}
+
+func TestParseGoSumMalformedLines(t *testing.T) {
+	// go.sum with lines that have fewer than 3 fields — should be skipped gracefully.
+	dir := t.TempDir()
+	content := `# comment line
+github.com/pkg/errors v0.9.1 h1:abc=
+too-few-fields
+github.com/pkg/errors
+golang.org/x/net v0.1.0 h1:ghi=
+
+`
+	if err := os.WriteFile(filepath.Join(dir, "go.sum"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	seen, err := parseGoSum(dir)
+	if err != nil {
+		t.Fatalf("parseGoSum() unexpected error for malformed lines: %v", err)
+	}
+	// Valid 3-field lines should still be parsed.
+	if !seen["github.com/pkg/errors"] {
+		t.Error("expected github.com/pkg/errors to be parsed despite malformed lines")
+	}
+	if !seen["golang.org/x/net"] {
+		t.Error("expected golang.org/x/net to be parsed despite malformed lines")
+	}
+}
+
+func TestParseGoSumOnlyComments(t *testing.T) {
+	dir := t.TempDir()
+	content := `# This file is intentionally empty
+# managed by go mod
+`
+	if err := os.WriteFile(filepath.Join(dir, "go.sum"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	seen, err := parseGoSum(dir)
+	if err != nil {
+		t.Fatalf("parseGoSum() unexpected error for comment-only file: %v", err)
+	}
+	if len(seen) != 0 {
+		t.Errorf("expected 0 entries for comment-only go.sum, got %d", len(seen))
+	}
+}

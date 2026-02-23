@@ -45,11 +45,38 @@ type graphData struct {
 	Main  string     `json:"main"`
 }
 
+// d3Node is the node format for D3-compatible node-link JSON output.
+type d3Node struct {
+	ID   string `json:"id"`
+	Risk string `json:"risk"`
+}
+
+// d3Link is the link format for D3-compatible node-link JSON output.
+type d3Link struct {
+	Source string `json:"source"`
+	Target string `json:"target"`
+}
+
+// d3Graph is the top-level D3-compatible node-link JSON structure.
+type d3Graph struct {
+	Nodes []d3Node `json:"nodes"`
+	Links []d3Link `json:"links"`
+}
+
 func Run(args []string) int {
 	fs := flag.NewFlagSet("viz", flag.ExitOnError)
 	minRisk := fs.String("min-risk", "low", "minimum risk level to show: low|medium|high")
 	lang := fs.String("lang", "auto", "language analyzer: auto|go|node")
+	format := fs.String("format", "html", "output format: html|json|dot")
 	fs.Parse(args)
+
+	switch *format {
+	case "html", "json", "dot":
+		// valid
+	default:
+		fmt.Fprintf(os.Stderr, "unknown format %q: must be html, json, or dot\n", *format)
+		return 2
+	}
 
 	dir, err := os.Getwd()
 	if err != nil {
@@ -147,6 +174,17 @@ func Run(args []string) int {
 		mainPath = g.Main.Path
 	}
 
+	switch *format {
+	case "json":
+		return outputJSON(nodes, edges)
+	case "dot":
+		return outputDOT(nodes, edges)
+	default:
+		return outputHTML(nodes, edges, mainPath)
+	}
+}
+
+func outputHTML(nodes []nodeData, edges []edgeData, mainPath string) int {
 	dataJSON, err := json.Marshal(graphData{Nodes: nodes, Edges: edges, Main: mainPath})
 	if err != nil {
 		fmt.Fprintln(os.Stderr, "marshal:", err)
@@ -157,6 +195,47 @@ func Run(args []string) int {
 	out = strings.Replace(out, "__SCRIPT__", jsTemplate, 1)
 	out = strings.Replace(out, "__DATA__", string(dataJSON), 1)
 	fmt.Print(out)
+	return 0
+}
+
+func outputJSON(nodes []nodeData, edges []edgeData) int {
+	d3nodes := make([]d3Node, len(nodes))
+	for i, n := range nodes {
+		d3nodes[i] = d3Node{ID: n.ID, Risk: n.Risk}
+	}
+
+	d3links := make([]d3Link, len(edges))
+	for i, e := range edges {
+		d3links[i] = d3Link(e)
+	}
+
+	g := d3Graph{
+		Nodes: d3nodes,
+		Links: d3links,
+	}
+
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(g); err != nil {
+		fmt.Fprintln(os.Stderr, "encode:", err)
+		return 2
+	}
+	return 0
+}
+
+func outputDOT(nodes []nodeData, edges []edgeData) int {
+	// Build a risk lookup for edge labels
+	riskOf := make(map[string]string, len(nodes))
+	for _, n := range nodes {
+		riskOf[n.ID] = n.Risk
+	}
+
+	fmt.Println("digraph {")
+	for _, e := range edges {
+		risk := riskOf[e.Source]
+		fmt.Printf("  %q -> %q [label=%q]\n", e.Source, e.Target, risk)
+	}
+	fmt.Println("}")
 	return 0
 }
 

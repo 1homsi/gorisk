@@ -22,7 +22,14 @@ type NpmPackage struct {
 
 // Load detects the lockfile type in dir and parses it.
 // It tries package-lock.json, then yarn.lock, then pnpm-lock.yaml.
-func Load(dir string) ([]NpmPackage, error) {
+// Load never panics; it returns a structured error on failure.
+func Load(dir string) (pkgs []NpmPackage, retErr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			retErr = fmt.Errorf("node.Load %s: recovered from panic: %v", dir, r)
+		}
+	}()
+
 	if _, err := os.Stat(filepath.Join(dir, "package-lock.json")); err == nil {
 		return loadPackageLock(dir)
 	}
@@ -59,19 +66,29 @@ type lockPkgV2 struct {
 }
 
 func loadPackageLock(dir string) ([]NpmPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "package-lock.json"))
+	path := filepath.Join(dir, "package-lock.json")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 	var lf packageLockJSON
 	if err := json.Unmarshal(data, &lf); err != nil {
-		return nil, fmt.Errorf("parse package-lock.json: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
 	directDeps := readDirectDeps(dir)
 
+	// v2 and v3 both use the "packages" map; v3 may omit "dependencies".
+	// v1 uses only "dependencies".
 	if lf.LockfileVersion >= 2 && len(lf.Packages) > 0 {
 		return parsePackageLockV2(dir, lf.Packages, directDeps), nil
+	}
+	// v3 with no packages and no dependencies → return empty, not error.
+	if lf.LockfileVersion >= 3 {
+		return nil, nil
 	}
 	return parsePackageLockV1(dir, lf.Dependencies, directDeps), nil
 }
@@ -87,6 +104,9 @@ func parsePackageLockV2(dir string, packages map[string]lockPkgV2, directDeps ma
 		// Handle nested: node_modules/foo/node_modules/bar → bar
 		if idx := strings.LastIndex(name, "node_modules/"); idx >= 0 {
 			name = name[idx+len("node_modules/"):]
+		}
+		if name == "" {
+			continue
 		}
 		var deps []string
 		for depName := range pkg.Dependencies {
@@ -106,6 +126,9 @@ func parsePackageLockV2(dir string, packages map[string]lockPkgV2, directDeps ma
 func parsePackageLockV1(dir string, dependencies map[string]lockDepV1, directDeps map[string]bool) []NpmPackage {
 	var result []NpmPackage
 	for name, dep := range dependencies {
+		if name == "" {
+			continue
+		}
 		var deps []string
 		for depName := range dep.Requires {
 			deps = append(deps, depName)
@@ -119,6 +142,9 @@ func parsePackageLockV1(dir string, dependencies map[string]lockDepV1, directDep
 		})
 		// Recurse into nested dependencies
 		for nestedName, nestedDep := range dep.Dependencies {
+			if nestedName == "" {
+				continue
+			}
 			var nestedDeps []string
 			for d := range nestedDep.Requires {
 				nestedDeps = append(nestedDeps, d)
@@ -139,19 +165,23 @@ func parsePackageLockV1(dir string, dependencies map[string]lockDepV1, directDep
 // ---------------------------------------------------------------------------
 
 func loadYarnLock(dir string) ([]NpmPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "yarn.lock"))
+	path := filepath.Join(dir, "yarn.lock")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 	directDeps := readDirectDeps(dir)
-	return parseYarnLock(dir, data, directDeps), nil
+	return parseYarnLock(dir, path, data, directDeps), nil
 }
 
 // rePkgName matches the package name at the start of a yarn.lock declaration:
 // "express@^4.x", express@^4.x, "@babel/core@^7.0.0"
 var rePkgName = regexp.MustCompile(`^"?(@?[^@"]+)@`)
 
-func parseYarnLock(dir string, data []byte, directDeps map[string]bool) []NpmPackage {
+func parseYarnLock(dir, path string, data []byte, directDeps map[string]bool) []NpmPackage {
 	var result []NpmPackage
 
 	scanner := bufio.NewScanner(bytes.NewReader(data))
@@ -163,17 +193,23 @@ func parseYarnLock(dir string, data []byte, directDeps map[string]bool) []NpmPac
 		inDeps         bool
 	)
 
+	seen := make(map[string]bool)
+
 	flush := func() {
 		if currentName == "" {
 			return
 		}
-		result = append(result, NpmPackage{
-			Name:         currentName,
-			Version:      currentVersion,
-			Dir:          filepath.Join(dir, "node_modules", currentName),
-			Dependencies: currentDeps,
-			Direct:       directDeps[currentName],
-		})
+		key := currentName + "@" + currentVersion
+		if !seen[key] {
+			seen[key] = true
+			result = append(result, NpmPackage{
+				Name:         currentName,
+				Version:      currentVersion,
+				Dir:          filepath.Join(dir, "node_modules", currentName),
+				Dependencies: currentDeps,
+				Direct:       directDeps[currentName],
+			})
+		}
 		currentName = ""
 		currentVersion = ""
 		currentDeps = nil
@@ -235,7 +271,9 @@ func parseYarnLock(dir string, data []byte, directDeps map[string]bool) []NpmPac
 			parts := strings.Fields(trimmed)
 			if len(parts) >= 1 {
 				depName := strings.Trim(parts[0], `"`)
-				currentDeps = append(currentDeps, depName)
+				if depName != "" {
+					currentDeps = append(currentDeps, depName)
+				}
 			}
 		}
 	}
@@ -249,9 +287,14 @@ func parseYarnLock(dir string, data []byte, directDeps map[string]bool) []NpmPac
 // ---------------------------------------------------------------------------
 
 func loadPnpmLock(dir string) ([]NpmPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "pnpm-lock.yaml"))
+	path := filepath.Join(dir, "pnpm-lock.yaml")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		// Empty lockfile is valid (e.g. fresh project with no deps).
+		return nil, nil
 	}
 	directDeps := readDirectDeps(dir)
 	return parsePnpmLock(dir, data, directDeps), nil
@@ -275,6 +318,8 @@ func parsePnpmLock(dir string, data []byte, directDeps map[string]bool) []NpmPac
 		currentVer  string
 		currentDeps []string
 		inDepsBlock bool
+		// Track whether we have entered an importers or packages/snapshots section.
+		inPackagesSection bool
 	)
 
 	flush := func() {
@@ -300,6 +345,29 @@ func parsePnpmLock(dir string, data []byte, directDeps map[string]bool) []NpmPac
 
 	for scanner.Scan() {
 		line := scanner.Text()
+
+		// Detect top-level section headers (no leading whitespace).
+		if len(line) > 0 && line[0] != ' ' && line[0] != '\t' {
+			trimTop := strings.TrimSpace(line)
+			// Sections that contain package entries.
+			if trimTop == "packages:" || trimTop == "snapshots:" {
+				flush()
+				inPackagesSection = true
+				inDepsBlock = false
+				continue
+			}
+			// importers: and lockfileVersion: are not package sections.
+			if strings.HasSuffix(trimTop, ":") || strings.Contains(trimTop, ":") {
+				flush()
+				inPackagesSection = false
+				inDepsBlock = false
+				continue
+			}
+		}
+
+		if !inPackagesSection {
+			continue
+		}
 
 		if m := rePnpmPkg.FindStringSubmatch(line); m != nil {
 			flush()

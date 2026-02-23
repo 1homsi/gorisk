@@ -189,19 +189,38 @@ func parseReplaceLine(line string) replaceDirective {
 
 // parseGoSum returns a set of module paths that have checksums in go.sum.
 // go.sum format: "<module> <version> <hash>" (space-separated, not @-separated).
+// Malformed lines (too few fields, empty module) are skipped rather than
+// causing an error, since go.sum is machine-generated and partial writes are
+// extremely rare. A scanner error (e.g. an overlong line) is returned with a
+// line-number hint.
 func parseGoSum(dir string) (map[string]bool, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "go.sum"))
+	path := filepath.Join(dir, "go.sum")
+	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil, err
 	}
 	seen := make(map[string]bool)
+	lineNo := 0
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
+		lineNo++
 		line := strings.TrimSpace(scanner.Text())
-		parts := strings.Fields(line)
-		if len(parts) >= 1 {
-			seen[parts[0]] = true
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
 		}
+		parts := strings.Fields(line)
+		// go.sum lines must have exactly 3 fields: module version hash
+		if len(parts) < 3 {
+			// Malformed line — skip gracefully.
+			continue
+		}
+		module := parts[0]
+		if module != "" {
+			seen[module] = true
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		return seen, fmt.Errorf("parse %s line %d: %w", path, lineNo, err)
 	}
 	return seen, nil
 }

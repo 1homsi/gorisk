@@ -260,3 +260,129 @@ func FuzzParsePomXML(f *testing.F) {
 		loadPomXML(dir) //nolint:errcheck
 	})
 }
+
+// ---------------------------------------------------------------------------
+// Malformed / empty input tests — verify no panic and graceful handling
+// ---------------------------------------------------------------------------
+
+func TestLoadPomXMLEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), []byte{}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := loadPomXML(dir)
+	if err != nil {
+		t.Fatalf("loadPomXML() unexpected error for empty file: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Errorf("expected 0 packages for empty pom.xml, got %d", len(pkgs))
+	}
+}
+
+func TestLoadPomXMLMalformed(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), []byte(`not xml at all`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := loadPomXML(dir)
+	if err == nil {
+		t.Error("expected error for malformed pom.xml, got nil")
+	}
+}
+
+func TestLoadPomXMLNoDependencies(t *testing.T) {
+	// pom.xml with no <dependencies> section — should return empty, not error.
+	dir := t.TempDir()
+	content := `<?xml version="1.0" encoding="UTF-8"?>
+<project>
+  <groupId>com.example</groupId>
+  <artifactId>myapp</artifactId>
+  <version>1.0</version>
+</project>
+`
+	if err := os.WriteFile(filepath.Join(dir, "pom.xml"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := loadPomXML(dir)
+	if err != nil {
+		t.Fatalf("loadPomXML() unexpected error: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Errorf("expected 0 packages for no-deps pom.xml, got %d", len(pkgs))
+	}
+}
+
+func TestLoadGradleLockEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "gradle.lockfile"), []byte{}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := loadGradleLock(dir)
+	if err != nil {
+		t.Fatalf("loadGradleLock() unexpected error for empty file: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Errorf("expected 0 packages for empty gradle.lockfile, got %d", len(pkgs))
+	}
+}
+
+func TestLoadGradleLockMalformed(t *testing.T) {
+	// gradle.lockfile with only comments and empty= lines — should return empty.
+	dir := t.TempDir()
+	content := `# Gradle generated lockfile
+# No packages
+empty=compileClasspath,runtimeClasspath
+`
+	if err := os.WriteFile(filepath.Join(dir, "gradle.lockfile"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := loadGradleLock(dir)
+	if err != nil {
+		t.Fatalf("loadGradleLock() unexpected error: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Errorf("expected 0 packages for comment-only gradle.lockfile, got %d", len(pkgs))
+	}
+}
+
+func TestLoadGradleLockMissingVersionField(t *testing.T) {
+	// Lines with fewer than 3 colon-separated fields should be skipped.
+	dir := t.TempDir()
+	content := `# Gradle lockfile
+com.google.guava:guava=compileClasspath
+com.google.guava:guava:32.0.0-jre=compileClasspath
+`
+	if err := os.WriteFile(filepath.Join(dir, "gradle.lockfile"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := loadGradleLock(dir)
+	if err != nil {
+		t.Fatalf("loadGradleLock() unexpected error: %v", err)
+	}
+	// Only the line with 3 fields should produce a package.
+	if len(pkgs) != 1 {
+		t.Errorf("expected 1 package (malformed line skipped), got %d", len(pkgs))
+	}
+}
+
+func TestLoadGradleBuildEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "build.gradle"), []byte{}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := loadGradleBuild(dir)
+	if err != nil {
+		t.Fatalf("loadGradleBuild() unexpected error for empty file: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Errorf("expected 0 packages for empty build.gradle, got %d", len(pkgs))
+	}
+}
+
+func TestLoadEmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	_, err := Load(dir)
+	if err == nil {
+		t.Error("expected error for directory with no Java lockfiles")
+	}
+}

@@ -262,3 +262,102 @@ func FuzzParseGemfileLock(f *testing.F) {
 		loadGemfileLock(dir) //nolint:errcheck
 	})
 }
+
+// ---------------------------------------------------------------------------
+// Malformed / empty input tests — verify no panic and graceful handling
+// ---------------------------------------------------------------------------
+
+func TestLoadGemfileLockEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Gemfile.lock"), []byte{}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := loadGemfileLock(dir)
+	if err != nil {
+		t.Fatalf("loadGemfileLock() unexpected error for empty file: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Errorf("expected 0 packages for empty Gemfile.lock, got %d", len(pkgs))
+	}
+}
+
+func TestLoadGemfileLockMalformed(t *testing.T) {
+	// Gemfile.lock with only PLATFORMS section — should return empty, not error.
+	dir := t.TempDir()
+	content := `PLATFORMS
+  ruby
+
+BUNDLED WITH
+   2.4.10
+`
+	if err := os.WriteFile(filepath.Join(dir, "Gemfile.lock"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := loadGemfileLock(dir)
+	if err != nil {
+		t.Fatalf("loadGemfileLock() unexpected error: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Errorf("expected 0 packages for platform-only Gemfile.lock, got %d", len(pkgs))
+	}
+}
+
+func TestLoadGemfileLockTruncated(t *testing.T) {
+	// Truncated Gemfile.lock — should not panic.
+	dir := t.TempDir()
+	content := `GEM
+  remote: https://rubygems.org/
+  specs:
+    rails (7.`
+	if err := os.WriteFile(filepath.Join(dir, "Gemfile.lock"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	// The test itself serves as a panic detector.
+	pkgs, err := loadGemfileLock(dir)
+	if err != nil {
+		t.Fatalf("loadGemfileLock() unexpected error for truncated file: %v", err)
+	}
+	// Partial parsing is acceptable; just verify no panic and no crash.
+	_ = pkgs
+}
+
+func TestLoadGemfileEmpty(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "Gemfile"), []byte{}, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := loadGemfile(dir)
+	if err != nil {
+		t.Fatalf("loadGemfile() unexpected error for empty file: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Errorf("expected 0 packages for empty Gemfile, got %d", len(pkgs))
+	}
+}
+
+func TestLoadGemfileMalformed(t *testing.T) {
+	// Gemfile with no gem declarations — should return empty, not error.
+	dir := t.TempDir()
+	content := `source 'https://rubygems.org'
+# this file has no gem declarations
+ruby '3.2.0'
+`
+	if err := os.WriteFile(filepath.Join(dir, "Gemfile"), []byte(content), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	pkgs, err := loadGemfile(dir)
+	if err != nil {
+		t.Fatalf("loadGemfile() unexpected error: %v", err)
+	}
+	if len(pkgs) != 0 {
+		t.Errorf("expected 0 packages for no-gem Gemfile, got %d", len(pkgs))
+	}
+}
+
+func TestLoadEmptyDir(t *testing.T) {
+	dir := t.TempDir()
+	_, err := Load(dir)
+	if err == nil {
+		t.Error("expected error for directory with no Ruby lockfiles")
+	}
+}

@@ -22,7 +22,14 @@ type PythonPackage struct {
 
 // Load detects and parses the Python dependency lockfile in dir.
 // Detection order: pyproject.toml+poetry.lock → Pipfile.lock → requirements.txt
-func Load(dir string) ([]PythonPackage, error) {
+// Load never panics; it returns a structured error on failure.
+func Load(dir string) (pkgs []PythonPackage, retErr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			retErr = fmt.Errorf("python.Load %s: recovered from panic: %v", dir, r)
+		}
+	}()
+
 	// poetry.lock takes priority when both pyproject.toml and poetry.lock exist.
 	switch {
 	case fileExists(filepath.Join(dir, "poetry.lock")):
@@ -48,9 +55,13 @@ var (
 )
 
 func loadPoetryLock(dir string) ([]PythonPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "poetry.lock"))
+	path := filepath.Join(dir, "poetry.lock")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read poetry.lock: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	directDeps := readPoetryDirectDeps(dir)
@@ -59,8 +70,10 @@ func loadPoetryLock(dir string) ([]PythonPackage, error) {
 	var cur *PythonPackage
 	inDeps := false
 
+	lineNo := 0
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
+		lineNo++
 		line := scanner.Text()
 
 		// New package section.
@@ -116,6 +129,9 @@ func loadPoetryLock(dir string) ([]PythonPackage, error) {
 			}
 		}
 	}
+	if err := scanner.Err(); err != nil {
+		return packages, fmt.Errorf("parse %s line %d: %w", path, lineNo, err)
+	}
 	if cur != nil && cur.Name != "" {
 		packages = append(packages, *cur)
 	}
@@ -169,20 +185,27 @@ type pipfilePkg struct {
 }
 
 func loadPipfileLock(dir string) ([]PythonPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "Pipfile.lock"))
+	path := filepath.Join(dir, "Pipfile.lock")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read Pipfile.lock: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	var lock pipfileLock
 	if err := json.Unmarshal(data, &lock); err != nil {
-		return nil, fmt.Errorf("parse Pipfile.lock: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
 	}
 
 	directDeps := readPipfileDirectDeps(dir)
 
 	var packages []PythonPackage
 	for name, pkg := range lock.Default {
+		if name == "" {
+			continue
+		}
 		ver := strings.TrimPrefix(pkg.Version, "==")
 		packages = append(packages, PythonPackage{
 			Name:    name,
@@ -191,6 +214,9 @@ func loadPipfileLock(dir string) ([]PythonPackage, error) {
 		})
 	}
 	for name, pkg := range lock.Develop {
+		if name == "" {
+			continue
+		}
 		ver := strings.TrimPrefix(pkg.Version, "==")
 		packages = append(packages, PythonPackage{
 			Name:    name,
@@ -235,14 +261,20 @@ func readPipfileDirectDeps(dir string) map[string]bool {
 var reRequirement = regexp.MustCompile(`^([A-Za-z0-9]([A-Za-z0-9._-]*[A-Za-z0-9])?)`)
 
 func loadRequirementsTxt(dir string) ([]PythonPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "requirements.txt"))
+	path := filepath.Join(dir, "requirements.txt")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read requirements.txt: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	var packages []PythonPackage
+	lineNo := 0
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
+		lineNo++
 		line := strings.TrimSpace(scanner.Text())
 		// Skip comments, blank lines, and options.
 		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "-") {
@@ -257,7 +289,10 @@ func loadRequirementsTxt(dir string) ([]PythonPackage, error) {
 			rest := line[len(m):]
 			rest = strings.TrimSpace(rest)
 			if v, ok := strings.CutPrefix(rest, "=="); ok {
-				ver = strings.Fields(v)[0] // take first token
+				fields := strings.Fields(v)
+				if len(fields) > 0 {
+					ver = fields[0]
+				}
 			}
 			packages = append(packages, PythonPackage{
 				Name:    m,
@@ -265,6 +300,9 @@ func loadRequirementsTxt(dir string) ([]PythonPackage, error) {
 				Direct:  true, // requirements.txt lists direct deps
 			})
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return packages, fmt.Errorf("parse %s line %d: %w", path, lineNo, err)
 	}
 	return packages, nil
 }
@@ -274,15 +312,21 @@ func loadRequirementsTxt(dir string) ([]PythonPackage, error) {
 // ---------------------------------------------------------------------------
 
 func loadPyprojectTOML(dir string) ([]PythonPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "pyproject.toml"))
+	path := filepath.Join(dir, "pyproject.toml")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read pyproject.toml: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	var packages []PythonPackage
 	inDeps := false
+	lineNo := 0
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
+		lineNo++
 		line := strings.TrimSpace(scanner.Text())
 		if line == "[project]" {
 			inDeps = false
@@ -315,6 +359,9 @@ func loadPyprojectTOML(dir string) ([]PythonPackage, error) {
 				})
 			}
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return packages, fmt.Errorf("parse %s line %d: %w", path, lineNo, err)
 	}
 	return packages, nil
 }

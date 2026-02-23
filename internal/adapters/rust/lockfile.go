@@ -20,7 +20,14 @@ type RustPackage struct {
 
 // Load detects and parses the Rust dependency lockfile in dir.
 // Detection order: Cargo.lock → Cargo.toml
-func Load(dir string) ([]RustPackage, error) {
+// Load never panics; it returns a structured error on failure.
+func Load(dir string) (pkgs []RustPackage, retErr error) {
+	defer func() {
+		if r := recover(); r != nil {
+			retErr = fmt.Errorf("rust.Load %s: recovered from panic: %v", dir, r)
+		}
+	}()
+
 	switch {
 	case fileExists(filepath.Join(dir, "Cargo.lock")):
 		return loadCargoLock(dir)
@@ -47,9 +54,13 @@ func Load(dir string) ([]RustPackage, error) {
 //	  "serde_derive",
 //	]
 func loadCargoLock(dir string) ([]RustPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "Cargo.lock"))
+	path := filepath.Join(dir, "Cargo.lock")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read Cargo.lock: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	rootPkg := readCargoTomlName(dir)
@@ -59,8 +70,10 @@ func loadCargoLock(dir string) ([]RustPackage, error) {
 	var cur *RustPackage
 	inDeps := false
 
+	lineNo := 0
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
+		lineNo++
 		line := scanner.Text()
 		trimmed := strings.TrimSpace(line)
 
@@ -99,9 +112,9 @@ func loadCargoLock(dir string) ([]RustPackage, error) {
 		if inDeps && strings.HasPrefix(trimmed, `"`) {
 			// "dep-name version" or just "dep-name"
 			raw := strings.Trim(trimmed, `",`)
-			depName := strings.Fields(raw)[0]
-			if depName != "" {
-				cur.Dependencies = append(cur.Dependencies, depName)
+			fields := strings.Fields(raw)
+			if len(fields) > 0 && fields[0] != "" {
+				cur.Dependencies = append(cur.Dependencies, fields[0])
 			}
 			continue
 		}
@@ -116,6 +129,9 @@ func loadCargoLock(dir string) ([]RustPackage, error) {
 				cur.Version = val
 			}
 		}
+	}
+	if err := scanner.Err(); err != nil {
+		return packages, fmt.Errorf("parse %s line %d: %w", path, lineNo, err)
 	}
 	if cur != nil && cur.Name != "" {
 		packages = append(packages, *cur)
@@ -140,10 +156,14 @@ func extractInlineDeps(line string, pkg *RustPackage) {
 	}
 	inner := line[start+1 : end]
 	for _, raw := range strings.Split(inner, ",") {
-		name := strings.Trim(strings.TrimSpace(raw), `"`)
-		name = strings.Fields(name)[0] // strip version suffix if any
-		if name != "" {
-			pkg.Dependencies = append(pkg.Dependencies, name)
+		raw = strings.TrimSpace(raw)
+		if raw == "" {
+			continue
+		}
+		name := strings.Trim(raw, `"`)
+		fields := strings.Fields(name)
+		if len(fields) > 0 && fields[0] != "" {
+			pkg.Dependencies = append(pkg.Dependencies, fields[0])
 		}
 	}
 }
@@ -158,16 +178,22 @@ func extractInlineDeps(line string, pkg *RustPackage) {
 //	serde = "1.0"
 //	serde = { version = "1.0", features = ["derive"] }
 func loadCargoToml(dir string) ([]RustPackage, error) {
-	data, err := os.ReadFile(filepath.Join(dir, "Cargo.toml"))
+	path := filepath.Join(dir, "Cargo.toml")
+	data, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("read Cargo.toml: %w", err)
+		return nil, fmt.Errorf("parse %s: %w", path, err)
+	}
+	if len(data) == 0 {
+		return nil, nil
 	}
 
 	var packages []RustPackage
 	inDeps := false
 
+	lineNo := 0
 	scanner := bufio.NewScanner(bytes.NewReader(data))
 	for scanner.Scan() {
+		lineNo++
 		line := strings.TrimSpace(scanner.Text())
 		if line == "" || strings.HasPrefix(line, "#") {
 			continue
@@ -212,6 +238,9 @@ func loadCargoToml(dir string) ([]RustPackage, error) {
 			Version: version,
 			Direct:  true,
 		})
+	}
+	if err := scanner.Err(); err != nil {
+		return packages, fmt.Errorf("parse %s line %d: %w", path, lineNo, err)
 	}
 	return packages, nil
 }
