@@ -63,7 +63,7 @@ jobs:
           cache: true
 
       - name: Self-scan with gorisk action
-        uses: 1homsi/gorisk@main
+        uses: ./
         with:
           fail-on: high
           policy-file: .gorisk-policy.json

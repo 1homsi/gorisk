@@ -435,3 +435,38 @@ func TestRunWithExcludePackages(t *testing.T) {
 		t.Errorf("Run with policy = %d, want 0", code)
 	}
 }
+
+func TestIsExcluded(t *testing.T) {
+	patterns := []string{
+		"github.com/1homsi/gorisk/*",
+		"golang.org/x/tools/*",
+		"gopkg.in/yaml.v3",
+		"@babel/*",
+	}
+	cases := []struct {
+		pkg  string
+		want bool
+	}{
+		// wildcard Go paths
+		{"github.com/1homsi/gorisk/cmd/gorisk/scan", true},
+		{"github.com/1homsi/gorisk/internal/analyzer", true},
+		{"golang.org/x/tools/go/ssa", true},
+		{"golang.org/x/tools/internal/pkgbits", true},
+		// exact match
+		{"gopkg.in/yaml.v3", true},
+		// scoped Node wildcard
+		{"@babel/core", true},
+		{"@babel/preset-env", true},
+		// non-matching
+		{"github.com/1homsi/other", false},
+		{"gopkg.in/yaml.v2", false},
+		{"@scope/pkg", false},
+		{"lodash", false},
+	}
+	for _, tc := range cases {
+		got := isExcluded(tc.pkg, patterns)
+		if got != tc.want {
+			t.Errorf("isExcluded(%q) = %v, want %v", tc.pkg, got, tc.want)
+		}
+	}
+}

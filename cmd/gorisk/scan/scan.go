@@ -195,10 +195,7 @@ func Run(args []string) int {
 		}
 	}
 
-	excluded := make(map[string]bool, len(p.ExcludePackages))
-	for _, pkg := range p.ExcludePackages {
-		excluded[pkg] = true
-	}
+	excludePatterns := p.ExcludePackages
 
 	exceptions, taintExceptions, exceptionStats := buildExceptions(p.AllowExceptions)
 
@@ -339,7 +336,7 @@ func Run(args []string) int {
 	integScore := integReport.Score
 
 	for _, cr := range capReports {
-		if excluded[cr.Package] {
+		if isExcluded(cr.Package, excludePatterns) {
 			continue
 		}
 		pkg := g.Packages[cr.Package]
@@ -512,6 +509,24 @@ func writeDiffSection(w *os.File, r *versiondiff.DiffReport) {
 			fmt.Fprintf(w, "  %-45s  %-10s  %5.1f\n", pd.Package, pd.ChangeType, pd.RiskDelta)
 		}
 	}
+}
+
+// isExcluded reports whether pkg matches any pattern in the exclude list.
+// Patterns ending with "/*" match any sub-path: "github.com/foo/*" matches
+// "github.com/foo/bar" and "github.com/foo/bar/baz".
+// Exact patterns match only the exact package path.
+func isExcluded(pkg string, patterns []string) bool {
+	for _, p := range patterns {
+		if strings.HasSuffix(p, "/*") {
+			prefix := strings.TrimSuffix(p, "/*")
+			if pkg == prefix || strings.HasPrefix(pkg, prefix+"/") {
+				return true
+			}
+		} else if pkg == p {
+			return true
+		}
+	}
+	return false
 }
 
 func fmtDur(d time.Duration) string {
