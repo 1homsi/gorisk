@@ -13,14 +13,14 @@ example.com/go-simple  example.com/go-simple                                    
 
 === Topology ===
 Direct deps: 0   Total: 2   MaxDepth: 2
-DeepPackagePct: 0.0%   MajorVersionSkew: 0   DuplicateVersions: 0   LockfileChurn(90d): 0
+DeepPackagePct: 0.0%   MajorVersionSkew: 0   DuplicateVersions: 0   LockfileChurn(90d): 1
 Signal                   Value  Score
 ──────────────────────────────────────
 DirectDeps                   0    0.0
 DeepPackagePct               0    0.0
 MajorVersionSkew             0    0.0
 DuplicateVersions            0    0.0
-LockfileChurn                0    0.0
+LockfileChurn                1    0.0
 TOTAL                             0.0
 
 === Integrity ===

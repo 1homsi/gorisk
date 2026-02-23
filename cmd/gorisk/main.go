@@ -21,6 +21,7 @@ import (
 	topologycmd "github.com/1homsi/gorisk/cmd/gorisk/topology"
 	"github.com/1homsi/gorisk/cmd/gorisk/trace"
 	"github.com/1homsi/gorisk/cmd/gorisk/upgrade"
+	validatepolicy "github.com/1homsi/gorisk/cmd/gorisk/validate-policy"
 	"github.com/1homsi/gorisk/cmd/gorisk/viz"
 )
 
@@ -69,6 +70,8 @@ func main() {
 		os.Exit(integritycmd.Run(os.Args[2:]))
 	case "init":
 		os.Exit(initcmd.Run(os.Args[2:]))
+	case "validate-policy":
+		os.Exit(validatepolicy.Run(os.Args[2:]))
 	case "version":
 		fmt.Println(version)
 	default:
@@ -87,7 +90,7 @@ Usage:
   gorisk diff           [--json] <module@old> <module@new>
   gorisk upgrade        [--json] <module@version>
   gorisk impact         [--json] <module[@version]>
-  gorisk scan           [--json] [--sarif] [--fail-on low|medium|high] [--policy file.json] [--timings] [--online] [--base <ref>]
+  gorisk scan           [--json] [--sarif] [--fail-on low|medium|high] [--policy file.json] [--timings] [--online] [--base <ref>] [--top N] [--focus <module>] [--hide-low-confidence]
   gorisk reachability   [--json] [--min-risk low|medium|high] [--entry file] [--lang auto|go|node]
   gorisk pr             [--json] [--base ref] [--head ref]
   gorisk graph          [--json] [--min-risk low|medium|high] [pattern]
@@ -100,5 +103,6 @@ Usage:
   gorisk topology       [--json] [--lang auto|go|node]
   gorisk integrity      [--json] [--lang auto|go|node]
   gorisk init           [--force] [--stdout]
+  gorisk validate-policy  [--policy file.json]
   gorisk version`)
 }

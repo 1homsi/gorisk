@@ -52,6 +52,7 @@ type ImpactReport struct {
 }
 
 type ScanReport struct {
+	SchemaVersion string `json:"schema_version,omitempty"`
 	GraphChecksum string `json:"graph_checksum,omitempty"`
 	Capabilities  []CapabilityReport
 	Health        []HealthReport             // only populated with --online

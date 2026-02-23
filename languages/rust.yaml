@@ -1,0 +1,75 @@
+# Capability patterns for Rust
+#
+# Covers import statements (use/extern crate) and call-site patterns matched in
+# .rs source files. Import patterns are matched against crate/module names.
+# Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: rust
+
+imports:
+  # ── Network ────────────────────────────────────────────────────────────────
+  reqwest:            [network]
+  hyper:              [network]
+  actix-web:          [network]
+  tokio:              [network]
+  async-std:          [network]
+  surf:               [network]
+  ureq:               [network]
+  tungstenite:        [network]
+  aws-sdk-s3:         [network, fs:read, fs:write]
+  aws-config:         [network]
+  tonic:              [network]
+  # ── Filesystem ─────────────────────────────────────────────────────────────
+  std::fs:            [fs:read, fs:write]
+  walkdir:            [fs:read]
+  tempfile:           [fs:write]
+  # ── Process execution ──────────────────────────────────────────────────────
+  std::process:       [exec]
+  subprocess:         [exec]
+  duct:               [exec]
+  # ── Crypto ────────────────────────────────────────────────────────────────
+  ring:               [crypto]
+  openssl:            [crypto, network]
+  rustls:             [crypto, network]
+  sha2:               [crypto]
+  sha1:               [crypto]
+  md5:                [crypto]
+  aes:                [crypto]
+  jsonwebtoken:       [crypto]
+  argon2:             [crypto]
+  bcrypt:             [crypto]
+  # ── Unsafe / FFI ──────────────────────────────────────────────────────────
+  libc:               [unsafe]
+  nix:                [unsafe, exec]
+  winapi:             [unsafe]
+  windows:            [unsafe]
+  # ── Plugin / dynamic loading ──────────────────────────────────────────────
+  libloading:         [plugin]
+  dlopen:             [plugin]
+  # ── Env ───────────────────────────────────────────────────────────────────
+  dotenv:             [env]
+  # ── Reflection ────────────────────────────────────────────────────────────
+  serde:              [reflect]
+  serde_json:         [reflect]
+  serde_yaml:         [reflect]
+  # ── Database ──────────────────────────────────────────────────────────────
+  diesel:             [network]
+  sqlx:               [network]
+  redis:              [network]
+  mongodb:            [network]
+  tokio-postgres:     [network]
+  sea-orm:            [network]
+
+call_sites:
+  "Command::new(":             [exec]
+  "std::process::Command":     [exec]
+  "std::env::var(":            [env]
+  "std::env::vars(":           [env]
+  "std::fs::read(":            [fs:read]
+  "std::fs::write(":           [fs:write]
+  "std::fs::remove_file(":     [fs:write]
+  "std::fs::create_dir(":      [fs:write]
+  "unsafe {":                  [unsafe]
+  "libloading::Library::new(": [plugin]

@@ -34,6 +34,21 @@ func TestDetect(t *testing.T) {
 			files:    []string{},
 			expected: "go", // defaults to go
 		},
+		{
+			name:     "java project (pom.xml)",
+			files:    []string{"pom.xml"},
+			expected: "java",
+		},
+		{
+			name:     "rust project",
+			files:    []string{"Cargo.toml"},
+			expected: "rust",
+		},
+		{
+			name:     "ruby project",
+			files:    []string{"Gemfile.lock"},
+			expected: "ruby",
+		},
 	}
 
 	for _, tt := range tests {
@@ -99,8 +114,23 @@ func TestForLang(t *testing.T) {
 			expectName: "python",
 		},
 		{
+			name:       "explicit java",
+			lang:       "java",
+			expectName: "java",
+		},
+		{
+			name:       "explicit rust",
+			lang:       "rust",
+			expectName: "rust",
+		},
+		{
+			name:       "explicit ruby",
+			lang:       "ruby",
+			expectName: "ruby",
+		},
+		{
 			name:        "invalid language",
-			lang:        "rust",
+			lang:        "cobol",
 			expectError: true,
 		},
 		{
@@ -175,7 +205,7 @@ func TestFeaturesFor(t *testing.T) {
 		},
 		{
 			name:        "invalid language",
-			lang:        "rust",
+			lang:        "cobol",
 			expectError: true,
 		},
 		{

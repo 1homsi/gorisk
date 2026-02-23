@@ -1,0 +1,79 @@
+# Capability patterns for Ruby
+#
+# Covers require/import statements and call-site patterns matched in .rb source
+# files. Import patterns are matched against gem/library names. Call-site
+# patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: ruby
+
+imports:
+  # ── Network ────────────────────────────────────────────────────────────────
+  faraday:          [network]
+  httparty:         [network]
+  rest-client:      [network]
+  net-http:         [network]
+  typhoeus:         [network]
+  excon:            [network]
+  aws-sdk-s3:       [network, fs:read, fs:write]
+  aws-sdk-core:     [network]
+  google-cloud:     [network, fs:read, fs:write]
+  stripe:           [network]
+  twilio-ruby:      [network]
+  # ── Filesystem ─────────────────────────────────────────────────────────────
+  fileutils:        [fs:read, fs:write]
+  pathname:         [fs:read]
+  tempfile:         [fs:write]
+  # ── Process execution ──────────────────────────────────────────────────────
+  open3:            [exec]
+  shellwords:       [exec]
+  posix-spawn:      [exec]
+  # ── Crypto ────────────────────────────────────────────────────────────────
+  openssl:          [crypto, network]
+  bcrypt:           [crypto]
+  jwt:              [crypto]
+  devise:           [crypto, network]
+  # ── Env ───────────────────────────────────────────────────────────────────
+  dotenv:           [env]
+  # ── Reflection ────────────────────────────────────────────────────────────
+  json:             [reflect]
+  yaml:             [reflect]
+  marshal:          [unsafe]
+  # ── Database ──────────────────────────────────────────────────────────────
+  activerecord:     [network]
+  pg:               [network]
+  mysql2:           [network]
+  sqlite3:          [fs:read, fs:write, network]
+  mongoid:          [network]
+  redis:            [network]
+  sequel:           [network]
+  # ── Web frameworks ────────────────────────────────────────────────────────
+  rails:            [network, fs:read, fs:write, exec]
+  sinatra:          [network]
+  rack:             [network]
+
+call_sites:
+  "system(":          [exec]
+  "`":                [exec]
+  "exec(":            [exec]
+  "spawn(":           [exec]
+  "IO.popen(":        [exec]
+  "Open3.popen":      [exec]
+  "eval(":            [unsafe]
+  "instance_eval(":   [unsafe]
+  "class_eval(":      [unsafe]
+  "Marshal.load(":    [unsafe]
+  "require ":         [plugin]
+  "require_relative ": [plugin]
+  "load ":            [plugin]
+  "ENV[":             [env]
+  "ENV.fetch(":       [env]
+  "File.read(":       [fs:read]
+  "File.write(":      [fs:write]
+  "File.delete(":     [fs:write]
+  "FileUtils.rm(":    [fs:write]
+  "FileUtils.cp(":    [fs:read, fs:write]
+  "Dir.glob(":        [fs:read]
+  "Net::HTTP.":       [network]
+  "OpenSSL::":        [crypto]

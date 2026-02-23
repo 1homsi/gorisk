@@ -6,9 +6,12 @@ import (
 	"path/filepath"
 
 	goadapter "github.com/1homsi/gorisk/internal/adapters/go"
+	javaadapter "github.com/1homsi/gorisk/internal/adapters/java"
 	nodeadapter "github.com/1homsi/gorisk/internal/adapters/node"
 	phpadapter "github.com/1homsi/gorisk/internal/adapters/php"
 	pythonadapter "github.com/1homsi/gorisk/internal/adapters/python"
+	rubyadapter "github.com/1homsi/gorisk/internal/adapters/ruby"
+	rustadapter "github.com/1homsi/gorisk/internal/adapters/rust"
 	"github.com/1homsi/gorisk/internal/graph"
 	"github.com/1homsi/gorisk/internal/prdiff"
 	"github.com/1homsi/gorisk/internal/reachability"
@@ -43,10 +46,13 @@ var registry = map[string]LangFeatures{
 		Reachability: reachability.PHPAnalyzer{},
 	},
 	"python": {},
+	"java":   {},
+	"rust":   {},
+	"ruby":   {},
 }
 
 // FeaturesFor returns the feature implementations for the given language.
-// lang may be "auto", "go", "node", "php", or "python".
+// lang may be "auto", "go", "node", "php", "python", "java", "rust", or "ruby".
 func FeaturesFor(lang, dir string) (LangFeatures, error) {
 	if lang == "auto" || lang == "" {
 		lang = detect(dir)
@@ -56,7 +62,7 @@ func FeaturesFor(lang, dir string) (LangFeatures, error) {
 	}
 	f, ok := registry[lang]
 	if !ok {
-		return LangFeatures{}, fmt.Errorf("unknown language %q; choose auto|go|node|php|python", lang)
+		return LangFeatures{}, fmt.Errorf("unknown language %q; choose auto|go|node|php|python|java|rust|ruby", lang)
 	}
 	return f, nil
 }
@@ -68,8 +74,9 @@ type Analyzer interface {
 }
 
 // ForLang returns an Analyzer for the given language specifier.
-// lang may be "auto", "go", "node", "php", or "python".
-// "auto" detects from go.mod / package.json / composer.json / requirements.txt presence.
+// lang may be "auto", "go", "node", "php", "python", "java", "rust", or "ruby".
+// "auto" detects from go.mod / package.json / composer.json / requirements.txt /
+// pom.xml / Cargo.toml / Gemfile presence.
 func ForLang(lang, dir string) (Analyzer, error) {
 	if lang == "auto" {
 		lang = detect(dir)
@@ -83,10 +90,16 @@ func ForLang(lang, dir string) (Analyzer, error) {
 		return &phpadapter.Adapter{}, nil
 	case "python":
 		return &pythonadapter.Adapter{}, nil
+	case "java":
+		return &javaadapter.Adapter{}, nil
+	case "rust":
+		return &rustadapter.Adapter{}, nil
+	case "ruby":
+		return &rubyadapter.Adapter{}, nil
 	case "multi":
 		return &multiAnalyzer{}, nil
 	default:
-		return nil, fmt.Errorf("unknown language %q; choose auto|go|node|php|python", lang)
+		return nil, fmt.Errorf("unknown language %q; choose auto|go|node|php|python|java|rust|ruby", lang)
 	}
 }
 
@@ -99,7 +112,18 @@ func detect(dir string) string {
 	hasPoetryLock := fileExists(filepath.Join(dir, "poetry.lock"))
 	hasPipfileLock := fileExists(filepath.Join(dir, "Pipfile.lock"))
 	hasRequirementsTxt := fileExists(filepath.Join(dir, "requirements.txt"))
+	hasPomXML := fileExists(filepath.Join(dir, "pom.xml"))
+	hasGradleLock := fileExists(filepath.Join(dir, "gradle.lockfile"))
+	hasBuildGradle := fileExists(filepath.Join(dir, "build.gradle")) || fileExists(filepath.Join(dir, "build.gradle.kts"))
+	hasCargoToml := fileExists(filepath.Join(dir, "Cargo.toml"))
+	hasGemfileLock := fileExists(filepath.Join(dir, "Gemfile.lock"))
+	hasGemfile := fileExists(filepath.Join(dir, "Gemfile"))
+
 	isPython := hasPyprojectTOML || hasPoetryLock || hasPipfileLock || hasRequirementsTxt
+	isJava := hasPomXML || hasGradleLock || hasBuildGradle
+	isRust := hasCargoToml
+	isRuby := hasGemfileLock || hasGemfile
+
 	switch {
 	case hasGoMod && hasPkgJSON:
 		return "multi"
@@ -111,6 +135,12 @@ func detect(dir string) string {
 		return "php"
 	case isPython:
 		return "python"
+	case isJava:
+		return "java"
+	case isRust:
+		return "rust"
+	case isRuby:
+		return "ruby"
 	default:
 		return "go"
 	}

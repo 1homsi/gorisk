@@ -14,14 +14,14 @@ node-simple  node-simple                                           0  [32mLOW  
 
 === Topology ===
 Direct deps: 1   Total: 1   MaxDepth: 1
-DeepPackagePct: 0.0%   MajorVersionSkew: 0   DuplicateVersions: 0   LockfileChurn(90d): 0
+DeepPackagePct: 0.0%   MajorVersionSkew: 0   DuplicateVersions: 0   LockfileChurn(90d): 1
 Signal                   Value  Score
 ──────────────────────────────────────
 DirectDeps                   1    0.0
 DeepPackagePct               0    0.0
 MajorVersionSkew             0    0.0
 DuplicateVersions            0    0.0
-LockfileChurn                0    0.0
+LockfileChurn                1    0.0
 TOTAL                             0.0
 
 === Integrity ===

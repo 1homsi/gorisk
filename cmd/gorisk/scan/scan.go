@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -16,6 +17,7 @@ import (
 	"github.com/1homsi/gorisk/internal/engines/integrity"
 	"github.com/1homsi/gorisk/internal/engines/topology"
 	"github.com/1homsi/gorisk/internal/engines/versiondiff"
+	"github.com/1homsi/gorisk/internal/graph"
 	"github.com/1homsi/gorisk/internal/health"
 	"github.com/1homsi/gorisk/internal/interproc"
 	"github.com/1homsi/gorisk/internal/priority"
@@ -202,6 +204,18 @@ func writeExceptionSummary(w *os.File, stats exceptionStats) {
 	}
 }
 
+// filterByFocus returns only capability reports whose module or package path
+// equals the focus module or has it as a prefix.
+func filterByFocus(reports []report.CapabilityReport, focus string, g *graph.DependencyGraph) []report.CapabilityReport {
+	var out []report.CapabilityReport
+	for _, cr := range reports {
+		if cr.Module == focus || strings.HasPrefix(cr.Module, focus+"/") || cr.Package == focus || strings.HasPrefix(cr.Package, focus+"/") {
+			out = append(out, cr)
+		}
+	}
+	return out
+}
+
 func Run(args []string) int {
 	fs := flag.NewFlagSet("scan", flag.ExitOnError)
 	jsonOut := fs.Bool("json", false, "JSON output")
@@ -213,6 +227,9 @@ func Run(args []string) int {
 	verbose := fs.Bool("verbose", false, "enable verbose debug logging")
 	online := fs.Bool("online", false, "enable health/CVE scoring via GitHub and OSV APIs")
 	base := fs.String("base", "", "compare against this git ref or lockfile path for diff-risk scoring")
+	topN := fs.Int("top", 0, "show only top N packages by final score (0 = all)")
+	focus := fs.String("focus", "", "filter output to this module and its transitive deps")
+	hideLowConf := fs.Bool("hide-low-confidence", false, "filter findings with confidence < 0.65 (alias for --confidence-threshold 0.65)")
 	fs.Parse(args)
 
 	dir, err := os.Getwd()
@@ -249,6 +266,35 @@ func Run(args []string) int {
 				return 2
 			}
 		}
+	}
+
+	// Apply environment variable overrides (take precedence over policy file).
+	if v := os.Getenv("GORISK_FAIL_ON"); v != "" {
+		switch v {
+		case "low", "medium", "high":
+			*failOn = v
+			p.FailOn = v
+		default:
+			fmt.Fprintf(os.Stderr, "[WARN] GORISK_FAIL_ON=%q ignored (must be low|medium|high)\n", v)
+		}
+	}
+	if v := os.Getenv("GORISK_CONFIDENCE_THRESHOLD"); v != "" {
+		if f, err := strconv.ParseFloat(v, 64); err == nil && f >= 0 && f <= 1 {
+			p.ConfidenceThreshold = f
+		} else {
+			fmt.Fprintf(os.Stderr, "[WARN] GORISK_CONFIDENCE_THRESHOLD=%q ignored (must be 0.0–1.0)\n", v)
+		}
+	}
+	if v := os.Getenv("GORISK_ONLINE"); v == "1" || v == "true" {
+		*online = true
+	}
+	if v := os.Getenv("GORISK_LANG"); v != "" {
+		*lang = v
+	}
+
+	// Apply --hide-low-confidence: set threshold to 0.65 if not already set.
+	if *hideLowConf && p.ConfidenceThreshold == 0 {
+		p.ConfidenceThreshold = 0.65
 	}
 
 	excludePatterns := p.ExcludePackages
@@ -304,6 +350,11 @@ func Run(args []string) int {
 		})
 	}
 	capDur := time.Since(t1)
+
+	// Apply --focus filter: keep only packages matching the focus module/path.
+	if *focus != "" {
+		capReports = filterByFocus(capReports, *focus, g)
+	}
 
 	// Phase: run engines concurrently
 	t2 := time.Now()
@@ -369,6 +420,7 @@ func Run(args []string) int {
 	}
 
 	sr := report.ScanReport{
+		SchemaVersion: "v1",
 		GraphChecksum: g.Checksum(),
 		Capabilities:  capReports,
 		Health:        healthReports,
@@ -486,6 +538,15 @@ func Run(args []string) int {
 				break
 			}
 		}
+	}
+
+	// Apply --top N: sort by capability score descending and truncate.
+	if *topN > 0 && len(capReports) > *topN {
+		sort.Slice(capReports, func(i, j int) bool {
+			return capReports[i].Capabilities.Score > capReports[j].Capabilities.Score
+		})
+		capReports = capReports[:*topN]
+		sr.Capabilities = capReports
 	}
 
 	// Phase: output formatting

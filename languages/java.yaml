@@ -1,0 +1,96 @@
+# Capability patterns for Java
+#
+# Covers import statements and call-site patterns matched in .java source files.
+# Import patterns are matched against the full or prefix-matched import path.
+# Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: java
+
+imports:
+  # ── Network ────────────────────────────────────────────────────────────────
+  java.net.http:                [network]
+  java.net:                     [network]
+  java.net.URL:                 [network]
+  java.net.URLConnection:       [network]
+  javax.net.ssl:                [network, crypto]
+  org.apache.http:              [network]
+  org.apache.http.client:       [network]
+  okhttp3:                      [network]
+  com.squareup.okhttp3:         [network]
+  retrofit2:                    [network]
+  feign:                        [network]
+  io.netty:                     [network]
+  io.grpc:                      [network]
+  com.google.api.client:        [network]
+  com.amazonaws:                [network, fs:read, fs:write]
+  com.azure:                    [network, fs:read, fs:write]
+  com.google.cloud:             [network, fs:read, fs:write]
+  software.amazon.awssdk:       [network, fs:read, fs:write]
+  # ── Filesystem ─────────────────────────────────────────────────────────────
+  java.io:                      [fs:read, fs:write]
+  java.nio:                     [fs:read, fs:write]
+  java.nio.file:                [fs:read, fs:write]
+  org.apache.commons.io:        [fs:read, fs:write]
+  # ── Process execution ──────────────────────────────────────────────────────
+  java.lang.ProcessBuilder:     [exec]
+  java.lang.Runtime:            [exec]
+  # ── Crypto ────────────────────────────────────────────────────────────────
+  java.security:                [crypto]
+  javax.crypto:                 [crypto]
+  org.bouncycastle:             [crypto]
+  io.jsonwebtoken:              [crypto]
+  com.auth0.jwt:                [crypto]
+  # ── Unsafe / reflection ───────────────────────────────────────────────────
+  java.lang.reflect:            [reflect]
+  sun.misc.Unsafe:              [unsafe]
+  javassist:                    [reflect, unsafe]
+  net.bytebuddy:                [reflect, unsafe]
+  org.objenesis:                [reflect, unsafe]
+  # ── Plugin / dynamic loading ──────────────────────────────────────────────
+  java.lang.ClassLoader:        [plugin]
+  org.springframework.plugin:   [plugin]
+  # ── Environment ────────────────────────────────────────────────────────────
+  java.util.Properties:         [env]
+  # ── Database ──────────────────────────────────────────────────────────────
+  java.sql:                     [network]
+  javax.sql:                    [network]
+  org.hibernate:                [network]
+  com.baeldung:                 [network]
+  org.springframework.data:     [network]
+  com.mongodb:                  [network]
+  org.springframework.jdbc:     [network]
+  redis.clients.jedis:          [network]
+  # ── Serialization (unsafe) ────────────────────────────────────────────────
+  java.io.ObjectInputStream:    [unsafe]
+  com.fasterxml.jackson:        [reflect]
+  com.google.gson:              [reflect]
+  org.yaml.snakeyaml:           [reflect, unsafe]
+  # ── Spring / frameworks ───────────────────────────────────────────────────
+  org.springframework.web:      [network]
+  org.springframework.boot:     [network, fs:read, fs:write]
+  org.springframework.security: [crypto, network]
+  javax.servlet:                [network]
+  jakarta.servlet:              [network]
+
+call_sites:
+  "Runtime.getRuntime().exec(":    [exec]
+  "new ProcessBuilder(":           [exec]
+  "ProcessBuilder.start(":         [exec]
+  "System.getenv(":                [env]
+  "System.getProperties(":         [env]
+  "new URL(":                      [network]
+  "HttpClient.newHttpClient(":     [network]
+  "new ObjectInputStream(":        [unsafe]
+  "Class.forName(":                [plugin]
+  "ClassLoader.loadClass(":        [plugin]
+  "Method.invoke(":                [reflect]
+  "Field.set(":                    [reflect]
+  "Files.readAllBytes(":           [fs:read]
+  "Files.write(":                  [fs:write]
+  "new FileInputStream(":          [fs:read]
+  "new FileOutputStream(":         [fs:write]
+  "Cipher.getInstance(":           [crypto]
+  "MessageDigest.getInstance(":    [crypto]
+  "KeyPairGenerator.getInstance(": [crypto]
