@@ -158,3 +158,50 @@ const net = require('net');
 		}
 	}
 }
+
+func TestScanFileNamespacedCloseCalls(t *testing.T) {
+	dir := t.TempDir()
+	src := `child_process.exec("ls");
+http.request("http://example.com");
+fs.promises.readFile("a.txt");
+fs.promises.writeFile("a.txt", "x");
+module.createRequire(import.meta.url);
+`
+	writeTempJSFile(t, dir, "close_calls.js", src)
+
+	var caps capability.CapabilitySet
+	scanFile(filepath.Join(dir, "close_calls.js"), &caps)
+
+	for _, want := range []capability.Capability{
+		capability.CapExec,
+		capability.CapNetwork,
+		capability.CapFSRead,
+		capability.CapFSWrite,
+		capability.CapPlugin,
+	} {
+		if !caps.Has(want) {
+			t.Errorf("expected %q from namespaced close calls, got %v", want, caps.List())
+		}
+	}
+}
+
+func TestScanFileNoBroadTokenFalsePositives(t *testing.T) {
+	dir := t.TempDir()
+	src := `const helper = {
+  request: function(url) { return url; },
+  spawn: function(cmd) { return cmd; },
+  readFile: function(path) { return path; }
+};
+helper.request("x");
+helper.spawn("y");
+helper.readFile("z");
+`
+	writeTempJSFile(t, dir, "negative.js", src)
+
+	var caps capability.CapabilitySet
+	scanFile(filepath.Join(dir, "negative.js"), &caps)
+
+	if caps.Has(capability.CapNetwork) || caps.Has(capability.CapExec) || caps.Has(capability.CapFSRead) {
+		t.Fatalf("expected no broad-token detections, got caps=%v", caps.List())
+	}
+}

@@ -231,6 +231,49 @@ $region = $_ENV['AWS_REGION'];
 	}
 }
 
+func TestScanFileLaravelCloseCalls(t *testing.T) {
+	dir := t.TempDir()
+	phpCode := `<?php
+Http::head('https://example.com/health');
+Http::retry(3, 100)->post('https://example.com/api');
+Storage::temporaryUrl('a.txt', now()->addMinutes(5));
+Process::start('php artisan queue:work');
+`
+	if err := os.WriteFile(filepath.Join(dir, "laravel.php"), []byte(phpCode), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	caps := Detect(dir)
+	for _, want := range []capability.Capability{
+		capability.CapNetwork,
+		capability.CapExec,
+	} {
+		if !caps.Has(want) {
+			t.Errorf("expected %q from Laravel close calls, got %v", want, caps.List())
+		}
+	}
+}
+
+func TestScanFileNoBroadTokenFalsePositives(t *testing.T) {
+	dir := t.TempDir()
+	phpCode := `<?php
+$request = function($url) { return $url; };
+$runner = function($task) { return $task; };
+$open = function($file) { return $file; };
+$request('x');
+$runner('y');
+$open('z');
+`
+	if err := os.WriteFile(filepath.Join(dir, "negative.php"), []byte(phpCode), 0600); err != nil {
+		t.Fatal(err)
+	}
+
+	caps := Detect(dir)
+	if caps.Has(capability.CapNetwork) || caps.Has(capability.CapExec) {
+		t.Fatalf("expected no broad-token detections, got caps=%v", caps.List())
+	}
+}
+
 // ── adapter / Load ────────────────────────────────────────────────────────────
 
 func TestAdapterName(t *testing.T) {

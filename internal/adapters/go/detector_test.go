@@ -174,3 +174,35 @@ func fetch() {}
 		t.Error("expected network evidence from b.go")
 	}
 }
+
+func TestDetectFileNewGoCloseCallPatterns(t *testing.T) {
+	src := `package main
+import (
+	"crypto/tls"
+	"net"
+	"os"
+)
+func main() {
+	_, _ = os.Readlink("a")
+	_ = os.Truncate("a", 0)
+	_, _ = net.ListenPacket("udp", ":0")
+	_, _ = net.LookupTXT("example.com")
+	_, _ = tls.DialWithDialer(nil, "tcp", "example.com:443", nil)
+}
+`
+	path := writeTempGoFile(t, src)
+	cs, err := DetectFile(path, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []capability.Capability{
+		capability.CapFSRead,
+		capability.CapFSWrite,
+		capability.CapNetwork,
+		capability.CapCrypto,
+	} {
+		if !cs.Has(want) {
+			t.Errorf("expected %q in caps, got %v", want, cs.List())
+		}
+	}
+}

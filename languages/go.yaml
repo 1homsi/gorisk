@@ -164,6 +164,7 @@ call_sites:
   os.OpenFile:          [fs:read, fs:write]
   os.ReadFile:          [fs:read]
   os.ReadDir:           [fs:read]
+  os.Readlink:          [fs:read]
   os.Stat:              [fs:read]
   os.Lstat:             [fs:read]
   os.TempDir:           [fs:read]
@@ -190,6 +191,7 @@ call_sites:
   os.Rename:            [fs:write]
   os.Symlink:           [fs:write]
   os.Link:              [fs:write]
+  os.Truncate:          [fs:write]
   os.Chmod:             [fs:write]
   os.Chown:             [fs:write]
   ioutil.WriteFile:     [fs:write]
@@ -227,7 +229,10 @@ call_sites:
   net.ResolveUDPAddr:        [network]
   net.LookupHost:            [network]
   net.LookupIP:              [network]
+  net.LookupTXT:             [network]
+  net.ListenPacket:          [network]
   tls.Dial:                  [network, crypto]
+  tls.DialWithDialer:        [network, crypto]
   tls.Listen:                [network, crypto]
 
   # ── Database ──────────────────────────────────────────────────────────────

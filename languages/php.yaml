@@ -309,6 +309,7 @@ call_sites:
   "Storage::exists(":     [fs:read]
   "Storage::files(":      [fs:read]
   "Storage::url(":        [network]
+  "Storage::temporaryUrl(": [network]
   "Storage::disk(":       [fs:read, fs:write]
   "Storage::cloud(":      [fs:read, fs:write, network]
   "Storage::makeDirectory(": [fs:write]
@@ -316,10 +317,12 @@ call_sites:
 
   # HTTP client
   "Http::get(":           [network]
+  "Http::head(":          [network]
   "Http::post(":          [network]
   "Http::put(":           [network]
   "Http::patch(":         [network]
   "Http::delete(":        [network]
+  "Http::retry(":         [network]
   "Http::withHeaders(":   [network]
   "Http::withToken(":     [network, crypto]
   "Http::pool(":          [network]
@@ -353,6 +356,7 @@ call_sites:
   "Artisan::queue(":      [exec, network]
   "Artisan::output(":     [exec]
   "Process::run(":        [exec]
+  "Process::start(":      [exec]
   "Process::pipe(":       [exec]
   "Process::pool(":       [exec]
 
