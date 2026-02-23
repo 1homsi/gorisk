@@ -8,6 +8,7 @@ import (
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/ir"
 )
 
 // Adapter implements the analyzer.Analyzer interface for Java projects.
@@ -133,4 +134,42 @@ func applyImportCaps(javaPkg JavaPackage, pkg *graph.Package) {
 			return
 		}
 	}
+}
+
+// BuildIRGraph builds a function-level IR graph for a Java dependency graph.
+func BuildIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	return buildJavaFunctionIRGraph(g)
+}
+
+// buildJavaFunctionIRGraph converts packages into a function-level IRGraph.
+// Uses funcdetector.go to parse Java source files and build a call graph.
+func buildJavaFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	irGraph := ir.IRGraph{
+		Functions: make(map[string]ir.FunctionCaps),
+		Calls:     []ir.CallEdge{},
+	}
+
+	for _, pkg := range g.Packages {
+		if pkg.Dir == "" {
+			continue
+		}
+
+		files, err := filepath.Glob(filepath.Join(pkg.Dir, "*.java"))
+		if err != nil || len(files) == 0 {
+			continue
+		}
+
+		var names []string
+		for _, f := range files {
+			names = append(names, filepath.Base(f))
+		}
+
+		funcs, edges, _ := DetectFunctions(pkg.Dir, names)
+		for k, fc := range funcs {
+			irGraph.Functions[k] = fc
+		}
+		irGraph.Calls = append(irGraph.Calls, edges...)
+	}
+
+	return irGraph
 }

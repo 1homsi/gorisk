@@ -8,6 +8,7 @@ import (
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/ir"
 )
 
 // Adapter implements the analyzer.Analyzer interface for Rust projects.
@@ -105,4 +106,42 @@ func (a *Adapter) Load(dir string) (*graph.DependencyGraph, error) {
 	g.Edges[rootName] = rootEdges
 
 	return g, nil
+}
+
+// BuildIRGraph builds a function-level IR graph for a Rust dependency graph.
+func BuildIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	return buildRustFunctionIRGraph(g)
+}
+
+// buildRustFunctionIRGraph converts packages into a function-level IRGraph by
+// running DetectFunctions on each package's .rs source files.
+func buildRustFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	irGraph := ir.IRGraph{
+		Functions: make(map[string]ir.FunctionCaps),
+		Calls:     []ir.CallEdge{},
+	}
+
+	for _, pkg := range g.Packages {
+		if pkg.Dir == "" {
+			continue
+		}
+
+		files, _ := filepath.Glob(filepath.Join(pkg.Dir, "*.rs"))
+		if len(files) == 0 {
+			continue
+		}
+
+		var names []string
+		for _, f := range files {
+			names = append(names, filepath.Base(f))
+		}
+
+		funcs, edges, _ := DetectFunctions(pkg.Dir, names)
+		for k, fc := range funcs {
+			irGraph.Functions[k] = fc
+		}
+		irGraph.Calls = append(irGraph.Calls, edges...)
+	}
+
+	return irGraph
 }

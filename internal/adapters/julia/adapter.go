@@ -7,6 +7,7 @@ import (
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/ir"
 )
 
 // Adapter implements the analyzer.Analyzer interface for Julia projects.
@@ -97,4 +98,33 @@ func applyJuliaImportCaps(juliaPkg JuliaPackage, pkg *graph.Package) {
 			})
 		}
 	}
+}
+
+// BuildIRGraph constructs a function-level IR graph from a DependencyGraph by
+// parsing Julia source files in each package directory.
+func BuildIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	return buildJuliaFunctionIRGraph(g)
+}
+
+func buildJuliaFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	irGraph := ir.IRGraph{Functions: make(map[string]ir.FunctionCaps), Calls: []ir.CallEdge{}}
+	for _, pkg := range g.Packages {
+		if pkg.Dir == "" {
+			continue
+		}
+		fs, _ := filepath.Glob(filepath.Join(pkg.Dir, "*.jl"))
+		if len(fs) == 0 {
+			continue
+		}
+		var names []string
+		for _, f := range fs {
+			names = append(names, filepath.Base(f))
+		}
+		funcs, edges, _ := DetectFunctions(pkg.Dir, names)
+		for k, fc := range funcs {
+			irGraph.Functions[k] = fc
+		}
+		irGraph.Calls = append(irGraph.Calls, edges...)
+	}
+	return irGraph
 }

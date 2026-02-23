@@ -8,6 +8,7 @@ import (
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/ir"
 )
 
 // Adapter implements the analyzer.Adapter interface for Haskell projects.
@@ -107,4 +108,44 @@ func applyHaskellImportCaps(hsPkg HaskellPackage, pkg *graph.Package) {
 			return
 		}
 	}
+}
+
+// BuildIRGraph builds a function-level IR graph for a Haskell dependency graph.
+func BuildIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	return buildHaskellFunctionIRGraph(g)
+}
+
+// buildHaskellFunctionIRGraph converts packages into a function-level IRGraph by
+// running DetectFunctions on each package's .hs/.lhs source files.
+func buildHaskellFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	irGraph := ir.IRGraph{
+		Functions: make(map[string]ir.FunctionCaps),
+		Calls:     []ir.CallEdge{},
+	}
+
+	for _, pkg := range g.Packages {
+		if pkg.Dir == "" {
+			continue
+		}
+
+		hsFiles, _ := filepath.Glob(filepath.Join(pkg.Dir, "*.hs"))
+		lhsFiles, _ := filepath.Glob(filepath.Join(pkg.Dir, "*.lhs"))
+		files := append(hsFiles, lhsFiles...)
+		if len(files) == 0 {
+			continue
+		}
+
+		var names []string
+		for _, f := range files {
+			names = append(names, filepath.Base(f))
+		}
+
+		funcs, edges, _ := DetectFunctions(pkg.Dir, names)
+		for k, fc := range funcs {
+			irGraph.Functions[k] = fc
+		}
+		irGraph.Calls = append(irGraph.Calls, edges...)
+	}
+
+	return irGraph
 }

@@ -5,6 +5,7 @@ import (
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/ir"
 )
 
 // Adapter implements the analyzer.Analyzer interface for Lua projects.
@@ -97,4 +98,41 @@ func applyLuaImportCaps(lPkg LuaPackage, pkg *graph.Package) {
 			})
 		}
 	}
+}
+
+// BuildIRGraph builds a function-level IR graph for a Lua dependency graph.
+func BuildIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	return buildLuaFunctionIRGraph(g)
+}
+
+// buildLuaFunctionIRGraph converts packages into a function-level IRGraph.
+func buildLuaFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	irGraph := ir.IRGraph{
+		Functions: make(map[string]ir.FunctionCaps),
+		Calls:     []ir.CallEdge{},
+	}
+
+	for _, pkg := range g.Packages {
+		if pkg.Dir == "" {
+			continue
+		}
+		files, _ := filepath.Glob(filepath.Join(pkg.Dir, "*.lua")) //nolint:errcheck
+		if len(files) == 0 {
+			continue
+		}
+		var names []string
+		for _, f := range files {
+			names = append(names, filepath.Base(f))
+		}
+		funcs, edges, err := DetectFunctions(pkg.Dir, names)
+		if err != nil {
+			continue
+		}
+		for k, fc := range funcs {
+			irGraph.Functions[k] = fc
+		}
+		irGraph.Calls = append(irGraph.Calls, edges...)
+	}
+
+	return irGraph
 }

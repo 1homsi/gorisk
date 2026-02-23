@@ -6,6 +6,7 @@ import (
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/ir"
 )
 
 // Adapter implements the analyzer.Analyzer interface for Elixir projects.
@@ -105,4 +106,46 @@ func applyElixirImportCaps(elixirPkg ElixirPackage, pkg *graph.Package) {
 			return
 		}
 	}
+}
+
+// BuildIRGraph builds a function-level IR graph for an Elixir dependency graph.
+func BuildIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	return buildElixirFunctionIRGraph(g)
+}
+
+// buildElixirFunctionIRGraph converts packages into a function-level IRGraph.
+func buildElixirFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	irGraph := ir.IRGraph{
+		Functions: make(map[string]ir.FunctionCaps),
+		Calls:     []ir.CallEdge{},
+	}
+
+	for _, pkg := range g.Packages {
+		if pkg.Dir == "" {
+			continue
+		}
+
+		var files []string
+		for _, pat := range []string{"*.ex", "*.exs"} {
+			fs, _ := filepath.Glob(filepath.Join(pkg.Dir, pat))
+			files = append(files, fs...)
+		}
+
+		if len(files) == 0 {
+			continue
+		}
+
+		var names []string
+		for _, f := range files {
+			names = append(names, filepath.Base(f))
+		}
+
+		funcs, edges, _ := DetectFunctions(pkg.Dir, names)
+		for k, fc := range funcs {
+			irGraph.Functions[k] = fc
+		}
+		irGraph.Calls = append(irGraph.Calls, edges...)
+	}
+
+	return irGraph
 }

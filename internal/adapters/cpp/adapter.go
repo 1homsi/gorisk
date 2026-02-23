@@ -9,6 +9,7 @@ import (
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/ir"
 )
 
 // Adapter implements the analyzer.Adapter interface for C/C++ projects.
@@ -113,4 +114,37 @@ func applyCppImportCaps(cppPkg CppPackage, pkg *graph.Package) {
 			return
 		}
 	}
+}
+
+// BuildIRGraph constructs a function-level IR graph from a DependencyGraph by
+// parsing C/C++ source files in each package directory.
+func BuildIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	return buildCppFunctionIRGraph(g)
+}
+
+func buildCppFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	irGraph := ir.IRGraph{Functions: make(map[string]ir.FunctionCaps), Calls: []ir.CallEdge{}}
+	for _, pkg := range g.Packages {
+		if pkg.Dir == "" {
+			continue
+		}
+		var files []string
+		for _, pat := range []string{"*.c", "*.cpp", "*.cc", "*.cxx", "*.h", "*.hpp"} {
+			fs, _ := filepath.Glob(filepath.Join(pkg.Dir, pat))
+			files = append(files, fs...)
+		}
+		if len(files) == 0 {
+			continue
+		}
+		var names []string
+		for _, f := range files {
+			names = append(names, filepath.Base(f))
+		}
+		funcs, edges, _ := DetectFunctions(pkg.Dir, names)
+		for k, fc := range funcs {
+			irGraph.Functions[k] = fc
+		}
+		irGraph.Calls = append(irGraph.Calls, edges...)
+	}
+	return irGraph
 }

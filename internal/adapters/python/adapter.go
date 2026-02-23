@@ -9,6 +9,7 @@ import (
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/ir"
 )
 
 // Adapter implements the analyzer.Analyzer interface for Python projects.
@@ -128,4 +129,41 @@ func readPyprojectName(dir string) string {
 		return import_.Project.Name
 	}
 	return ""
+}
+
+// BuildIRGraph builds a function-level IR graph for a Python dependency graph.
+func BuildIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	return buildPythonFunctionIRGraph(g)
+}
+
+// buildPythonFunctionIRGraph converts packages into a function-level IRGraph.
+func buildPythonFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	irGraph := ir.IRGraph{
+		Functions: make(map[string]ir.FunctionCaps),
+		Calls:     []ir.CallEdge{},
+	}
+
+	for _, pkg := range g.Packages {
+		if pkg.Dir == "" {
+			continue
+		}
+		files, _ := filepath.Glob(filepath.Join(pkg.Dir, "*.py")) //nolint:errcheck
+		if len(files) == 0 {
+			continue
+		}
+		var names []string
+		for _, f := range files {
+			names = append(names, filepath.Base(f))
+		}
+		funcs, edges, err := DetectFunctions(pkg.Dir, names)
+		if err != nil {
+			continue
+		}
+		for k, fc := range funcs {
+			irGraph.Functions[k] = fc
+		}
+		irGraph.Calls = append(irGraph.Calls, edges...)
+	}
+
+	return irGraph
 }

@@ -7,6 +7,7 @@ import (
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
+	"github.com/1homsi/gorisk/internal/ir"
 )
 
 // Adapter implements the analyzer.Adapter interface for Kotlin projects.
@@ -104,4 +105,50 @@ func applyKotlinImportCaps(kotlinPkg KotlinPackage, pkg *graph.Package) {
 	if kotlinPkg.Name != "" {
 		_ = os.Stat // satisfy unused import if needed
 	}
+}
+
+// BuildIRGraph builds a function-level IR graph for a Kotlin dependency graph.
+func BuildIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	return buildKotlinFunctionIRGraph(g)
+}
+
+// buildKotlinFunctionIRGraph converts packages into a function-level IRGraph.
+// Uses funcdetector.go to parse Kotlin source files and build a call graph.
+func buildKotlinFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
+	irGraph := ir.IRGraph{
+		Functions: make(map[string]ir.FunctionCaps),
+		Calls:     []ir.CallEdge{},
+	}
+
+	for _, pkg := range g.Packages {
+		if pkg.Dir == "" {
+			continue
+		}
+
+		ktFiles, err := filepath.Glob(filepath.Join(pkg.Dir, "*.kt"))
+		if err != nil {
+			continue
+		}
+		ktsFiles, err2 := filepath.Glob(filepath.Join(pkg.Dir, "*.kts"))
+		if err2 == nil {
+			ktFiles = append(ktFiles, ktsFiles...)
+		}
+
+		if len(ktFiles) == 0 {
+			continue
+		}
+
+		var names []string
+		for _, f := range ktFiles {
+			names = append(names, filepath.Base(f))
+		}
+
+		funcs, edges, _ := DetectFunctions(pkg.Dir, names)
+		for k, fc := range funcs {
+			irGraph.Functions[k] = fc
+		}
+		irGraph.Calls = append(irGraph.Calls, edges...)
+	}
+
+	return irGraph
 }
