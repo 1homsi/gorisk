@@ -19,7 +19,7 @@ Maps what your dependencies *can do* — network access, exec, filesystem writes
 
 Key differentiators:
 
-- **Polyglot** — pluggable `Analyzer` interface; ships with Go, Node.js, and PHP (Composer/Laravel) today; Python, Rust, Java, and Ruby on the roadmap.
+- **Polyglot** — pluggable `Analyzer` interface; ships with Go, Node.js, PHP (Composer/Laravel), Python, Rust, Java, and Ruby.
 - **Capability detection** — detect which packages can read files, make network calls, spawn processes, or use `unsafe`/`eval`. Know *what your dependencies can do* before they're in production.
 - **Evidence + confidence** — every capability detection is backed by file path, line number, match context, and a confidence score (import = 90%, call site = 60%, install script = 85%).
 - **Capability diff** — compare two versions of a dependency and detect capability escalation. If `v1.2.3 → v1.3.0` quietly added `exec` or `network`, gorisk flags it as a supply chain risk signal.
@@ -60,12 +60,12 @@ When both `go.mod` and `package.json` are present (monorepo), both analyzers run
 | Language | `--lang` | Status | Detection signal | Lockfile / manifest |
 |----------|----------|--------|-----------------|---------------------|
 | **Go** | `go` | ✅ stable | `go.mod` | `go.mod` + `go list` |
-| **Node.js** | `node` | ✅ stable | `package.json` | `package-lock.json` v1/v2/v3, `yarn.lock`, `pnpm-lock.yaml`; npm/yarn/pnpm workspaces (monorepos) |
+| **Node.js** | `node` | ✅ stable | `package.json` | `package-lock.json` v1/v2/v3, `yarn.lock`, `pnpm-lock.yaml`; npm/yarn/pnpm workspaces |
 | **PHP** | `php` | ✅ stable | `composer.json` / `composer.lock` | `composer.lock`; Laravel, Symfony, and bare Composer projects |
-| Python | `python` | 🗓 planned | `requirements.txt` / `pyproject.toml` | `poetry.lock`, `Pipfile.lock`, `uv.lock` |
-| Rust | `rust` | 🗓 planned | `Cargo.toml` | `Cargo.lock` |
-| Java | `java` | 🗓 planned | `pom.xml` / `build.gradle` | Maven, Gradle lock files |
-| Ruby | `ruby` | 🗓 planned | `Gemfile` | `Gemfile.lock` |
+| **Python** | `python` | ✅ stable | `pyproject.toml` / `requirements.txt` | `poetry.lock`, `Pipfile.lock`, `requirements.txt`, `pyproject.toml` |
+| **Rust** | `rust` | ✅ stable | `Cargo.toml` | `Cargo.lock`, `Cargo.toml` |
+| **Java** | `java` | ✅ stable | `pom.xml` / `build.gradle` | `pom.xml`, `gradle.lockfile`, `build.gradle` |
+| **Ruby** | `ruby` | ✅ stable | `Gemfile` / `Gemfile.lock` | `Gemfile.lock`, `Gemfile` |
 
 Want to add a language? The `Analyzer` interface is a single `Load(dir string) (*graph.DependencyGraph, error)` method — see [Contributing](#contributing).
 
@@ -103,8 +103,8 @@ Detects capabilities via static AST analysis of `.go` source files. Every detect
 | `crypto/*` | `crypto` | 90% (import) |
 | `reflect` | `reflect` | 90% (import) |
 | `plugin` | `plugin` | 90% (import) |
-| `exec.Command(` | `exec` | 60% (callSite) |
-| `http.Get(`, `http.Post(` | `network` | 60% (callSite) |
+| `exec.Command(` | `exec` | 75% (callSite) |
+| `http.Get(`, `http.Post(` | `network` | 75% (callSite) |
 
 #### Node.js
 
@@ -175,6 +175,24 @@ gorisk scan --fail-on low         # strictest: fail on any capability
 
 # Policy file (see Policy section below)
 gorisk scan --policy .gorisk-policy.json
+
+# Limit output to top N packages by risk score
+gorisk scan --top 10
+
+# Filter to a specific module and its transitive deps
+gorisk scan --focus github.com/foo/bar
+
+# Hide findings below 65% confidence
+gorisk scan --hide-low-confidence
+
+# Monorepo: merge all workspace members (go.work / npm/pnpm workspaces)
+gorisk scan --workspace
+
+# Diff against a base ref (requires git)
+gorisk scan --base origin/main
+
+# Online mode: include health scores and CVE data
+gorisk scan --online
 
 # Performance instrumentation
 gorisk scan --timings
@@ -509,6 +527,11 @@ gorisk viz > graph.html
 gorisk viz --min-risk medium > graph.html
 gorisk viz --lang node > graph.html
 open graph.html
+
+# Export formats
+gorisk viz --format html > graph.html    # default: interactive D3 graph
+gorisk viz --format json > graph.json    # D3 node-link JSON (nodes + links arrays)
+gorisk viz --format dot  > graph.dot     # Graphviz DOT (pipe to dot -Tsvg)
 ```
 
 **Graph features:**
@@ -540,6 +563,9 @@ gorisk pr                                # diffs origin/main...HEAD
 gorisk pr --lang node
 gorisk pr --base origin/main --head HEAD
 gorisk pr --json
+
+# Post a risk summary table as a PR comment (requires GITHUB_TOKEN + GORISK_PR_URL env vars)
+gorisk pr --comment
 ```
 
 **Exit code:** 1 if a new HIGH risk dependency was introduced (ideal as a CI gate on PRs).
@@ -667,6 +693,71 @@ gorisk trace --json github.com/foo/bar
 
 ---
 
+### `gorisk init`
+
+Generate a `.gorisk-policy.json` template in the current directory.
+
+```bash
+gorisk init                  # write .gorisk-policy.json
+gorisk init --force          # overwrite existing file
+gorisk init --stdout         # print to stdout without writing
+gorisk init --with-hook      # also install .git/hooks/pre-commit
+```
+
+---
+
+### `gorisk validate-policy`
+
+Validate a policy file's JSON schema without running a full scan. Reports unknown fields with nearest-match suggestions.
+
+```bash
+gorisk validate-policy .gorisk-policy.json
+```
+
+**Exit codes:** 0 = valid, 1 = invalid, 2 = error.
+
+---
+
+### `gorisk plugins`
+
+Manage gorisk capability detector and risk scorer plugins (stored in `~/.gorisk/plugins/`).
+
+```bash
+gorisk plugins list
+gorisk plugins install /path/to/plugin.so
+gorisk plugins install /path/to/plugin.so --force   # overwrite existing
+gorisk plugins remove plugin.so
+```
+
+---
+
+### `gorisk serve`
+
+Start a local REST API server for programmatic access.
+
+```bash
+gorisk serve                 # listens on 127.0.0.1:8080
+gorisk serve --port 9000
+gorisk serve --host 0.0.0.0
+```
+
+**Endpoints:**
+
+```bash
+# Health check
+curl http://localhost:8080/health
+# → {"status":"ok"}
+
+# Run a scan
+curl -s -X POST http://localhost:8080/scan \
+  -H 'Content-Type: application/json' \
+  -d '{"dir":"/path/to/project","lang":"auto"}' | jq .
+```
+
+Response HTTP status 200 = scan passed, 422 = scan failed policy.
+
+---
+
 ### `gorisk version`
 
 Print the gorisk version string.
@@ -685,34 +776,56 @@ gorisk can enforce rules automatically via a JSON policy file. Unknown fields ar
 {
   "version": 1,
   "fail_on": "high",
+  "confidence_threshold": 0.65,
   "min_health_score": 0,
   "max_health_score": 30,
   "block_archived": false,
   "deny_capabilities": ["exec", "plugin"],
   "allow_exceptions": [
-    { "package": "github.com/my/tool", "capabilities": ["exec"] }
+    {
+      "package": "github.com/my/tool",
+      "capabilities": ["exec"],
+      "expires": "2026-12-31"
+    }
   ],
   "max_dep_depth": 0,
-  "exclude_packages": []
+  "exclude_packages": [
+    "github.com/myorg/*",
+    "golang.org/x/*"
+  ],
+  "suppress": {
+    "by_file_pattern": ["*_test.go", "testdata/**"],
+    "by_module": ["github.com/test/*"],
+    "by_capability_via": []
+  }
 }
 ```
 
+Generate a template with `gorisk init` and validate with `gorisk validate-policy`.
+
 | Field | Type | Description |
 |-------|------|-------------|
-| `version` | int | Schema version — currently `1`. Unsupported versions are rejected at startup. |
+| `version` | int | Schema version — currently `1`. |
 | `fail_on` | string | Fail threshold: `"low"`, `"medium"`, or `"high"` (default: `"high"`) |
-| `min_health_score` | int | Fail if any module's health score is below this (0 = disabled) |
-| `max_health_score` | int | Legacy field; kept for compatibility |
-| `block_archived` | bool | Fail if any dependency is archived on GitHub |
+| `confidence_threshold` | float | Minimum evidence confidence (0.0–1.0). Recommended: `0.65`. Default: `0.0` (no filter). |
+| `min_health_score` | int | Fail if any module's health score is below this (0 = disabled, `--online` only) |
+| `max_health_score` | int | Fail if any module's health score is above this (0 = disabled, `--online` only) |
+| `block_archived` | bool | Fail if any dependency is archived on GitHub (`--online` only) |
 | `deny_capabilities` | []string | Block any package with these capabilities (e.g. `["exec", "network"]`) |
-| `allow_exceptions` | []object | Per-package exemptions from `deny_capabilities` |
+| `allow_exceptions` | []object | Per-package exemptions from `deny_capabilities`. Supports `expires` (ISO 8601 date). |
 | `max_dep_depth` | int | Maximum allowed dependency depth (0 = unlimited) |
-| `exclude_packages` | []string | Packages to skip entirely during scan |
+| `exclude_packages` | []string | Packages to skip entirely. Supports `/*` suffix for prefix matching. |
+| `suppress` | object | Additional suppression: `by_file_pattern`, `by_module`, `by_capability_via` |
 
 **allow_exceptions schema:**
 
 ```json
-{ "package": "github.com/my/tool", "capabilities": ["exec", "network"] }
+{
+  "package": "github.com/my/tool",
+  "capabilities": ["exec", "network"],
+  "taint": ["env→exec"],
+  "expires": "2026-12-31"
+}
 ```
 
 ---
@@ -896,9 +1009,42 @@ All commands that produce structured output support `--json`. The `gorisk scan` 
 
 | Variable | Purpose |
 |----------|---------|
-| `GORISK_GITHUB_TOKEN` | GitHub personal access token for health scoring (higher API rate limits) |
+| `GORISK_GITHUB_TOKEN` | GitHub personal access token for health scoring (5000 req/hr vs 60 without) |
+| `GORISK_FAIL_ON` | Override `fail_on` policy field at runtime (`low`, `medium`, `high`) |
+| `GORISK_CONFIDENCE_THRESHOLD` | Override `confidence_threshold` at runtime (e.g. `0.65`) |
+| `GORISK_ONLINE` | Set to `1` to enable health/CVE scoring without `--online` flag |
+| `GORISK_LANG` | Force language detection (e.g. `go`, `node`, `python`) |
+| `GITHUB_TOKEN` | Used by `gorisk pr --comment` to post PR comments |
+| `GORISK_PR_URL` | GitHub API URL for the PR (e.g. `https://api.github.com/repos/owner/repo/pulls/123`) — used with `gorisk pr --comment` |
 
-Without a token, the GitHub API rate limit is 60 requests/hour. With a token, it is 5000/hour.
+---
+
+## Go SDK
+
+gorisk ships a stable public API at `pkg/gorisk` for embedding scans in Go programs.
+
+```go
+import "github.com/1homsi/gorisk/pkg/gorisk"
+
+func checkDeps(dir string) error {
+    p, _ := gorisk.LoadPolicy(".gorisk-policy.json")
+    scanner := gorisk.NewScanner(gorisk.ScanOptions{
+        Dir:    dir,
+        Lang:   "auto",
+        Policy: p,
+    })
+    result, err := scanner.Scan()
+    if err != nil {
+        return err
+    }
+    if !result.Passed {
+        return fmt.Errorf("gorisk: %s", result.FailReason)
+    }
+    return nil
+}
+```
+
+The `pkg/gorisk` API is stable and will not have breaking changes within a major version. Internal packages (`internal/`) are not part of the public API.
 
 ---
 
