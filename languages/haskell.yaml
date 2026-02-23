@@ -1,0 +1,86 @@
+# Capability patterns for Haskell
+#
+# Covers import statements (Hackage package names) and call-site patterns
+# matched in .hs and .lhs source files. Import patterns are matched against
+# Hackage package names. Call-site patterns are matched as substrings of each
+# source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: haskell
+
+imports:
+  # ── Network ────────────────────────────────────────────────────────────────
+  http-client:          [network]
+  http-client-tls:      [network, crypto]
+  http-conduit:         [network]
+  wreq:                 [network]
+  req:                  [network]
+  servant:              [network]
+  servant-server:       [network]
+  warp:                 [network]
+  scotty:               [network]
+  yesod:                [network, fs:read, fs:write, exec]
+  snap:                 [network]
+  spock:                [network]
+  websockets:           [network]
+  network:              [network]
+  tls:                  [network, crypto]
+  # ── Crypto ────────────────────────────────────────────────────────────────
+  cryptonite:           [crypto]
+  cryptohash-sha256:    [crypto]
+  bcrypt:               [crypto]
+  jose:                 [crypto]
+  jwt:                  [crypto]
+  x509:                 [crypto]
+  # ── Filesystem ────────────────────────────────────────────────────────────
+  directory:            [fs:read, fs:write]
+  filepath:             [fs:read]
+  bytestring:           [fs:read]
+  text:                 [fs:read]
+  conduit:              [fs:read, fs:write, network, exec]
+  conduit-extra:        [fs:read, fs:write, exec]
+  resourcet:            [fs:read, fs:write]
+  # ── Process execution ──────────────────────────────────────────────────────
+  unix:                 [exec, fs:read, fs:write, env]
+  process:              [exec]
+  typed-process:        [exec]
+  shelly:               [exec, fs:read, fs:write]
+  turtle:               [exec, fs:read, fs:write]
+  # ── Environment ───────────────────────────────────────────────────────────
+  optparse-applicative: [env]
+  envy:                 [env]
+  dotenv:               [env]
+  # ── Serialization / Data ──────────────────────────────────────────────────
+  aeson:                [fs:read]
+  yaml:                 [fs:read]
+  cassava:              [fs:read]
+  # ── Database ──────────────────────────────────────────────────────────────
+  sqlite-simple:        [fs:read, fs:write]
+  postgresql-simple:    [network, fs:read]
+  persistent:           [network, fs:read, fs:write]
+  esqueleto:            [network, fs:read]
+  hedis:                [network]
+  mongodb:              [network]
+  # ── Plugin / Unsafe ───────────────────────────────────────────────────────
+  template-haskell:     [reflect, plugin, unsafe]
+  hint:                 [plugin, unsafe]
+  plugins:              [plugin]
+  foreign:              [unsafe]
+  inline-c:             [unsafe]
+
+call_sites:
+  "System.Process.createProcess":   [exec]
+  "System.Process.runProcess":      [exec]
+  "System.Environment.getEnv":      [env]
+  "System.Environment.lookupEnv":   [env]
+  "System.IO.hGetContents":         [fs:read]
+  "System.IO.hPutStrLn":            [fs:write]
+  "Data.ByteString.readFile":       [fs:read]
+  "Data.ByteString.writeFile":      [fs:write]
+  "Network.HTTP.Client.newManager": [network]
+  "Network.HTTP.Simple.httpBS":     [network]
+  "unsafePerformIO":                [unsafe]
+  "unsafeCoerce":                   [unsafe]
+  "Foreign.Ptr.castPtr":            [unsafe]
+  "Language.Haskell.TH":            [reflect, plugin]

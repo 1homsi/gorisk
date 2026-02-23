@@ -1,0 +1,89 @@
+# Capability patterns for Clojure
+#
+# Covers import/require statements and call-site patterns matched in .clj/.cljs/.cljc
+# source files. Import patterns are matched against Maven artifact names and namespaces.
+# Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: clojure
+
+imports:
+  # ── Core ──────────────────────────────────────────────────────────────────
+  org.clojure/clojure: []
+  # ── Network ───────────────────────────────────────────────────────────────
+  clj-http:                         [network]
+  http-kit:                         [network]
+  aleph:                            [network]
+  hato:                             [network]
+  clj-http-lite:                    [network]
+  ring:                             [network]
+  compojure:                        [network]
+  reitit:                           [network]
+  pedestal:                         [network]
+  luminus:                          [network, exec, fs:read, fs:write]
+  io.pedestal/pedestal.service:     [network]
+  # ── Execution ─────────────────────────────────────────────────────────────
+  clojure.java.shell:               [exec]
+  babashka/process:                 [exec]
+  org.babashka/babashka:            [exec, network, fs:read, fs:write]
+  claypoole:                        [exec]
+  manifold:                         [exec, network]
+  core.async:                       [exec]
+  # ── Filesystem ────────────────────────────────────────────────────────────
+  clojure.java.io:                  [fs:read, fs:write]
+  me.raynes/fs:                     [fs:read, fs:write]
+  # ── Database ──────────────────────────────────────────────────────────────
+  next.jdbc:                        [network, fs:read]
+  clojure.java.jdbc:                [network, fs:read]
+  com.github.seancorfield/next.jdbc: [network, fs:read]
+  honeysql:                         [network, fs:read]
+  org.postgresql/postgresql:        [network]
+  mysql/mysql-connector-java:       [network]
+  com.h2database/h2:                [network, fs:read, fs:write]
+  com.datomic/datomic-free:         [network, fs:read, fs:write]
+  congomongo:                       [network]
+  monger:                           [network]
+  carmine:                          [network]
+  # ── Crypto ────────────────────────────────────────────────────────────────
+  buddy/buddy-core:                 [crypto]
+  buddy/buddy-sign:                 [crypto]
+  buddy/buddy-auth:                 [crypto]
+  org.bouncycastle/bcprov-jdk18on:  [crypto]
+  # ── Data / Serialization ──────────────────────────────────────────────────
+  cheshire:                         [fs:read]
+  jsonista:                         [fs:read]
+  clojure.data.json:                [fs:read]
+  clj-yaml:                         [fs:read]
+  # ── Environment / Config ──────────────────────────────────────────────────
+  aero:                             [fs:read, env]
+  environ:                          [env]
+  cprop:                            [env]
+  # ── Logging ───────────────────────────────────────────────────────────────
+  clojure.tools.logging:            [fs:write]
+  timbre:                           [fs:write, network]
+  # ── Reflection / Plugin ───────────────────────────────────────────────────
+  tools.analyzer:                   [reflect, plugin]
+  clojure.reflect:                  [reflect]
+  dynaload:                         [plugin]
+  clojure.lang.RT:                  [plugin, reflect]
+
+call_sites:
+  "clojure.java.shell/sh":   [exec]
+  "shell/sh":                [exec]
+  "Process.":                [exec]
+  "Runtime/exec":            [exec]
+  "System/getenv":           [env]
+  "System/setProperty":      [env]
+  "slurp ":                  [fs:read]
+  "spit ":                   [fs:write]
+  "io/file":                 [fs:read, fs:write]
+  "clj-http.client/get":     [network]
+  "clj-http.client/post":    [network]
+  "http/get":                [network]
+  "http/post":               [network]
+  "MessageDigest/getInstance": [crypto]
+  "Cipher/getInstance":      [crypto]
+  "Class/forName":           [reflect, plugin]
+  "require '":               [plugin]
+  "load-file ":              [plugin]

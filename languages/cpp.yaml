@@ -1,0 +1,100 @@
+# Capability patterns for C/C++
+#
+# Covers import statements (library names from vcpkg/conan) and call-site
+# patterns matched in .c, .cpp, .cc, .cxx, .h, .hpp source files.
+# Import patterns are matched against library/package names.
+# Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: cpp
+
+imports:
+  # ── Network ────────────────────────────────────────────────────────────────
+  curl:             [network]
+  libcurl:          [network]
+  beast:            [network]
+  asio:             [network]
+  boost-asio:       [network]
+  poco:             [network, fs:read, fs:write, exec, crypto]
+  cpprestsdk:       [network]
+  restbed:          [network]
+  libwebsockets:    [network]
+  # ── Crypto ────────────────────────────────────────────────────────────────
+  openssl:          [crypto, network]
+  mbedtls:          [crypto, network]
+  libsodium:        [crypto]
+  botan:            [crypto]
+  cryptopp:         [crypto]
+  # ── Filesystem / Storage ──────────────────────────────────────────────────
+  sqlite3:          [fs:read, fs:write]
+  leveldb:          [fs:read, fs:write]
+  rocksdb:          [fs:read, fs:write]
+  lmdb:             [fs:read, fs:write]
+  zlib:             [fs:read, fs:write]
+  bzip2:            [fs:read, fs:write]
+  liblzma:          [fs:read, fs:write]
+  libarchive:       [fs:read, fs:write]
+  # ── Async / Event ─────────────────────────────────────────────────────────
+  libuv:            [exec, network, fs:read, fs:write]
+  libevent:         [network, exec]
+  # ── Plugin / Unsafe ───────────────────────────────────────────────────────
+  dlfcn:            [plugin, unsafe]
+  dl:               [plugin, unsafe]
+  capstone:         [unsafe, reflect]
+  keystone:         [unsafe]
+  unicorn:          [unsafe, exec]
+  libffi:           [unsafe, plugin]
+  # ── Logging ───────────────────────────────────────────────────────────────
+  spdlog:           [fs:write]
+  glog:             [fs:write]
+  log4cplus:        [fs:write]
+  # ── Serialization / Utility ───────────────────────────────────────────────
+  abseil:           [exec, fs:read]
+  protobuf:         [fs:read, fs:write, network]
+  grpc:             [network, exec]
+  flatbuffers:      [fs:read, fs:write]
+  msgpack:          [fs:read]
+  nlohmann-json:    [fs:read]
+  rapidjson:        [fs:read]
+  tinyxml2:         [fs:read]
+
+call_sites:
+  # ── Process execution ──────────────────────────────────────────────────────
+  "system(":              [exec]
+  "popen(":               [exec, fs:read]
+  "execve(":              [exec]
+  "execvp(":              [exec]
+  "fork(":                [exec]
+  "CreateProcess(":       [exec]
+  "ShellExecute(":        [exec]
+  "WinExec(":             [exec]
+  # ── Environment ───────────────────────────────────────────────────────────
+  "getenv(":              [env]
+  "setenv(":              [env]
+  "putenv(":              [env]
+  "GetEnvironmentVariable(": [env]
+  # ── Filesystem ────────────────────────────────────────────────────────────
+  "fopen(":               [fs:read, fs:write]
+  "fread(":               [fs:read]
+  "fwrite(":              [fs:write]
+  "open(":                [fs:read, fs:write]
+  "read(":                [fs:read]
+  "write(":               [fs:write]
+  # ── Network ───────────────────────────────────────────────────────────────
+  "socket(":              [network]
+  "connect(":             [network]
+  "bind(":                [network]
+  "accept(":              [network]
+  "send(":                [network]
+  "recv(":                [network]
+  # ── Plugin / Unsafe ───────────────────────────────────────────────────────
+  "dlopen(":              [plugin, unsafe]
+  "LoadLibrary(":         [plugin, unsafe]
+  "GetProcAddress(":      [plugin, unsafe]
+  "mmap(":                [unsafe]
+  "mprotect(":            [unsafe]
+  "VirtualAlloc(":        [unsafe]
+  "VirtualProtect(":      [unsafe]
+  "memcpy(":              [unsafe]
+  "reinterpret_cast<":    [unsafe]

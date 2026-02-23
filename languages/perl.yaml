@@ -1,0 +1,88 @@
+# Capability patterns for Perl
+#
+# Covers use/require import statements and call-site patterns matched in .pl,
+# .pm, and .t source files. Import patterns are matched against CPAN module
+# names. Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: perl
+
+imports:
+  # ── Network ────────────────────────────────────────────────────────────────
+  LWP::UserAgent:       [network]
+  LWP::Simple:          [network]
+  HTTP::Tiny:           [network]
+  HTTP::Request:        [network]
+  Mojo::UserAgent:      [network]
+  Mojolicious:          [network, exec]
+  Catalyst:             [network, exec, fs:read, fs:write]
+  Dancer2:              [network]
+  Plack:                [network]
+  IO::Socket::INET:     [network]
+  IO::Socket::SSL:      [network, crypto]
+  Net::HTTP:            [network]
+  Net::HTTPS:           [network, crypto]
+  Net::FTP:             [network]
+  Net::SMTP:            [network]
+  Net::SSH2:            [network, exec, crypto]
+  # ── Crypto ────────────────────────────────────────────────────────────────
+  Digest::SHA:          [crypto]
+  Digest::MD5:          [crypto]
+  Crypt::OpenSSL::RSA:  [crypto]
+  Crypt::Rijndael:      [crypto]
+  Crypt::JWT:           [crypto]
+  Crypt::Bcrypt:        [crypto]
+  # ── Filesystem ────────────────────────────────────────────────────────────
+  File::Slurp:          [fs:read, fs:write]
+  File::Find:           [fs:read]
+  Path::Tiny:           [fs:read, fs:write]
+  IO::File:             [fs:read, fs:write]
+  File::Copy:           [fs:read, fs:write]
+  File::Path:           [fs:read, fs:write]
+  # ── Database ──────────────────────────────────────────────────────────────
+  DBI:                  [network, fs:read]
+  DBD::Pg:              [network]
+  DBD::mysql:           [network]
+  DBD::SQLite:          [fs:read, fs:write, network]
+  DBIx::Class:          [network, fs:read]
+  # ── Env ───────────────────────────────────────────────────────────────────
+  Env:                  [env]
+  Dotenv:               [env]
+  # ── Exec ──────────────────────────────────────────────────────────────────
+  POSIX:                [exec, fs:read]
+  IPC::Open3:           [exec]
+  IPC::System::Simple:  [exec]
+  Proc::Simple:         [exec]
+  # ── Plugin / reflection ───────────────────────────────────────────────────
+  Module::Load:         [plugin]
+  Module::Runtime:      [plugin]
+  Class::MOP:           [reflect, plugin]
+  Moose:                [reflect, plugin]
+  Moo:                  [reflect]
+  UNIVERSAL::isa:       [reflect]
+  # ── Unsafe / native ───────────────────────────────────────────────────────
+  Inline::C:            [unsafe, plugin]
+  Inline::CPP:          [unsafe, plugin]
+  XS:                   [unsafe]
+  PDL:                  [unsafe, exec]
+
+call_sites:
+  "system(":            [exec]
+  "exec(":              [exec]
+  "open(my":            [exec, fs:read]
+  "qx{":                [exec]
+  "backtick":           [exec]
+  "`":                  [exec]
+  "$ENV{":              [env]
+  "open(":              [fs:read, fs:write]
+  "unlink(":            [fs:write]
+  "mkdir(":             [fs:write]
+  "LWP::UserAgent->new": [network]
+  "HTTP::Tiny->new":    [network]
+  "Digest::SHA->new":   [crypto]
+  "Crypt::":            [crypto]
+  "eval ":              [unsafe, plugin]
+  "require ":           [plugin]
+  "use ":               [plugin]
+  "dlopen(":            [plugin, unsafe]

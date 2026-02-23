@@ -1,0 +1,88 @@
+# Capability patterns for Erlang
+#
+# Covers include_lib/behaviour/import attributes and call-site patterns matched
+# in .erl/.hrl source files. Import patterns are matched against rebar3/Hex
+# package names. Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: erlang
+
+imports:
+  # ── Network ───────────────────────────────────────────────────────────────
+  hackney:            [network]
+  gun:                [network]
+  ibrowse:            [network]
+  httpc:              [network]
+  cowboy:             [network]
+  ranch:              [network]
+  inets:              [network, fs:read]
+  lhttpc:             [network]
+  # ── Serialization / Data ──────────────────────────────────────────────────
+  jesse:              [fs:read]
+  jsx:                [fs:read]
+  jsone:              [fs:read]
+  jiffy:              [fs:read]
+  # ── Cloud / Database ──────────────────────────────────────────────────────
+  erlcloud:           [network, fs:read, fs:write, crypto]
+  epgsql:             [network]
+  mysql:              [network]
+  emysql:             [network]
+  eredis:             [network]
+  eredis_cluster:     [network]
+  mongodb_erlang:     [network]
+  mnesia:             [fs:read, fs:write, network]
+  dets:               [fs:read, fs:write]
+  ets:                [fs:read, fs:write]
+  # ── Crypto / TLS ──────────────────────────────────────────────────────────
+  crypto:             [crypto]
+  public_key:         [crypto, network]
+  ssl:                [network, crypto]
+  # ── Execution / System ────────────────────────────────────────────────────
+  os_mon:             [exec, env]
+  sasl:               [exec, fs:write]
+  kernel:             [exec, network, fs:read, fs:write, env]
+  stdlib:             [exec, fs:read, fs:write, env]
+  wx:                 [exec]
+  proper:             [exec]
+  eunit:              [exec]
+  poolboy:            [exec]
+  gproc:              [exec, reflect]
+  syn:                [exec]
+  partisan:           [network, exec]
+  riak_core:          [network, exec, fs:read, fs:write]
+  # ── Logging ───────────────────────────────────────────────────────────────
+  lager:              [fs:write, network]
+  logger:             [fs:write]
+  # ── Reflection / Debug ────────────────────────────────────────────────────
+  observer:           [reflect]
+  debugger:           [reflect]
+  runtime_tools:      [reflect, unsafe]
+  hipe:               [unsafe]
+  dialyzer:           [reflect]
+  enif_protobuf:      [unsafe]
+
+call_sites:
+  "os:cmd(":                  [exec]
+  "os:getenv(":               [env]
+  "os:putenv(":               [env]
+  "file:read_file(":          [fs:read]
+  "file:write_file(":         [fs:write]
+  "file:delete(":             [fs:write]
+  "file:make_dir(":           [fs:write]
+  "file:list_dir(":           [fs:read]
+  "httpc:request(":           [network]
+  "gun:open(":                [network]
+  "hackney:request(":         [network]
+  "ssl:connect(":             [network, crypto]
+  "gen_tcp:connect(":         [network]
+  "gen_udp:open(":            [network]
+  "crypto:hash(":             [crypto]
+  "crypto:mac(":              [crypto]
+  "erlang:load_nif(":         [unsafe, plugin]
+  "code:load_file(":          [plugin]
+  "code:load_abs(":           [plugin]
+  "erlang:apply(":            [plugin]
+  "io:format(":               [fs:write]
+  "erlang:binary_to_term(":   [unsafe]
+  "erlang:term_to_binary(":   [unsafe]

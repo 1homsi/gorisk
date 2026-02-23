@@ -1,0 +1,98 @@
+# Capability patterns for R
+#
+# Covers library()/require() import statements and call-site patterns matched
+# in .R source files. Import patterns are matched against CRAN/Bioc package
+# names. Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: r
+
+imports:
+  # ── Network ────────────────────────────────────────────────────────────────
+  httr:             [network]
+  httr2:            [network]
+  curl:             [network]
+  RCurl:            [network]
+  rvest:            [network]
+  xml2:             [network, fs:read]
+  # ── Filesystem / data ──────────────────────────────────────────────────────
+  jsonlite:         [fs:read]
+  readr:            [fs:read]
+  readxl:           [fs:read]
+  openxlsx:         [fs:read, fs:write]
+  writexl:          [fs:write]
+  data.table:       [fs:read, fs:write]
+  arrow:            [fs:read, fs:write]
+  feather:          [fs:read, fs:write]
+  haven:            [fs:read]
+  foreign:          [fs:read]
+  # ── Database ──────────────────────────────────────────────────────────────
+  DBI:              [network, fs:read]
+  RSQLite:          [fs:read, fs:write, network]
+  RPostgres:        [network]
+  RMySQL:           [network]
+  mongolite:        [network]
+  redis:            [network]
+  odbc:             [network, fs:read]
+  # ── Crypto ────────────────────────────────────────────────────────────────
+  sodium:           [crypto]
+  openssl:          [crypto, network]
+  jose:             [crypto]
+  digest:           [crypto]
+  keyring:          [crypto, env]
+  # ── Exec ──────────────────────────────────────────────────────────────────
+  sys:              [exec]
+  processx:         [exec]
+  callr:            [exec]
+  system:           [exec]
+  reticulate:       [exec, plugin]
+  rJava:            [exec, plugin, unsafe]
+  # ── Unsafe / native ───────────────────────────────────────────────────────
+  Rcpp:             [unsafe]
+  RcppArmadillo:    [unsafe]
+  inline:           [unsafe, plugin]
+  # ── Env ───────────────────────────────────────────────────────────────────
+  dotenv:           [env]
+  config:           [fs:read, env]
+  # ── Logging / fs write ────────────────────────────────────────────────────
+  logger:           [fs:write]
+  log4r:            [fs:write]
+  futile.logger:    [fs:write]
+  # ── Filesystem helpers ────────────────────────────────────────────────────
+  fs:               [fs:read, fs:write]
+  here:             [fs:read]
+  withr:            [exec, fs:read, fs:write]
+  # ── Reflection / plugin ───────────────────────────────────────────────────
+  codetools:        [reflect, plugin]
+  methods:          [reflect]
+  compiler:         [reflect, plugin]
+  # ── Parallel / async ──────────────────────────────────────────────────────
+  parallel:         [exec]
+  future:           [exec, network]
+  furrr:            [exec]
+
+call_sites:
+  "system(":           [exec]
+  "system2(":          [exec]
+  "shell(":            [exec]
+  "Sys.getenv(":       [env]
+  "Sys.setenv(":       [env]
+  "readLines(":        [fs:read]
+  "writeLines(":       [fs:write]
+  "read.csv(":         [fs:read]
+  "write.csv(":        [fs:write]
+  "readRDS(":          [fs:read]
+  "saveRDS(":          [fs:write]
+  "GET(":              [network]
+  "POST(":             [network]
+  "download.file(":    [network, fs:write]
+  "digest::digest(":   [crypto]
+  "openssl::sha256(":  [crypto]
+  "source(":           [plugin, exec]
+  "eval(parse(":       [unsafe, plugin]
+  "dyn.load(":         [unsafe, plugin]
+  ".C(":               [unsafe]
+  ".Call(":            [unsafe]
+  "library(":          [plugin]
+  "require(":          [plugin]

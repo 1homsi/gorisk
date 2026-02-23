@@ -1,0 +1,76 @@
+# Capability patterns for Kotlin
+#
+# Covers Gradle dependency declarations (group:artifact) and call-site patterns
+# matched in .kt/.kts source files. Import patterns are keyed by group:artifact.
+# Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: kotlin
+
+imports:
+  # ── Network ────────────────────────────────────────────────────────────────
+  io.ktor:ktor-client-core:                                [network]
+  io.ktor:ktor-server-core:                                [network]
+  io.ktor:ktor-client-okhttp:                              [network]
+  com.squareup.okhttp3:okhttp:                             [network]
+  com.squareup.retrofit2:retrofit:                         [network]
+  org.postgresql:postgresql:                               [network]
+  mysql:mysql-connector-java:                              [network]
+  io.lettuce:lettuce-core:                                 [network]
+  org.mongodb.kotlin:mongodb-driver-kotlin-coroutine:      [network]
+  # ── Logging / Filesystem ───────────────────────────────────────────────────
+  io.github.microutils:kotlin-logging:                     [fs:write]
+  ch.qos.logback:logback-classic:                          [fs:write]
+  # ── Spring Boot ───────────────────────────────────────────────────────────
+  org.springframework.boot:spring-boot-starter-web:        [network, exec]
+  org.springframework.boot:spring-boot-starter-security:   [crypto]
+  org.springframework.boot:spring-boot-starter-data-jpa:   [network, fs:read, fs:write]
+  org.springframework.boot:spring-boot-starter:            [exec, network]
+  # ── Exposed ORM ───────────────────────────────────────────────────────────
+  org.jetbrains.exposed:exposed-core:                      [network, fs:read]
+  org.jetbrains.exposed:exposed-jdbc:                      [network, fs:read]
+  # ── Kotlin stdlib / serialization ─────────────────────────────────────────
+  org.jetbrains.kotlinx:kotlinx-coroutines-core:           [exec]
+  org.jetbrains.kotlinx:kotlinx-serialization-json:        [fs:read]
+  # ── JSON ──────────────────────────────────────────────────────────────────
+  com.fasterxml.jackson.core:jackson-databind:             [fs:read]
+  com.google.code.gson:gson:                               [fs:read]
+  # ── Crypto / Auth ─────────────────────────────────────────────────────────
+  org.bouncycastle:bcprov-jdk18on:                         [crypto]
+  io.jsonwebtoken:jjwt-api:                                [crypto]
+  com.auth0:java-jwt:                                      [crypto]
+  # ── Process execution ─────────────────────────────────────────────────────
+  org.apache.commons:commons-exec:                         [exec]
+  com.github.docker-java:docker-java-api:                  [exec, network]
+  # ── Database ──────────────────────────────────────────────────────────────
+  com.h2database:h2:                                       [network, fs:read, fs:write]
+  # ── Cloud / AWS / GCP ─────────────────────────────────────────────────────
+  com.amazonaws:aws-java-sdk-core:                         [network, fs:read, fs:write, crypto]
+  software.amazon.awssdk:s3:                               [network, fs:read, fs:write]
+  com.google.cloud:google-cloud-storage:                   [network, fs:read, fs:write]
+  # ── Reflection / DI ───────────────────────────────────────────────────────
+  org.reflections:reflections:                             [reflect]
+  io.insert-koin:koin-core:                                [plugin]
+  org.kodein.di:kodein-di:                                 [plugin]
+  # ── Native / Unsafe ───────────────────────────────────────────────────────
+  com.sun.jna:jna:                                         [unsafe]
+  # ── Apache Commons ────────────────────────────────────────────────────────
+  org.apache.commons:commons-lang3:                        [exec, fs:read]
+
+call_sites:
+  "ProcessBuilder(":                [exec]
+  "Runtime.getRuntime().exec(":     [exec]
+  "System.getenv(":                 [env]
+  "File(":                          [fs:read, fs:write]
+  "Files.readAllBytes(":            [fs:read]
+  "Files.write(":                   [fs:write]
+  "URL(":                           [network]
+  "HttpURLConnection":              [network]
+  "OkHttpClient(":                  [network]
+  "MessageDigest.getInstance(":     [crypto]
+  "Cipher.getInstance(":            [crypto]
+  "KeyPairGenerator.getInstance(":  [crypto]
+  "Class.forName(":                 [reflect, plugin]
+  "ClassLoader.loadClass(":         [plugin]
+  "Unsafe.getUnsafe(":              [unsafe]

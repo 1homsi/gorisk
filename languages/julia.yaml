@@ -1,0 +1,86 @@
+# Capability patterns for Julia
+#
+# Covers using/import statements and call-site patterns matched in .jl source
+# files. Import patterns are matched against Julia package names (exact case).
+# Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: julia
+
+imports:
+  # ── Network ────────────────────────────────────────────────────────────────
+  HTTP:               [network]
+  Requests:           [network]
+  Downloads:          [network]
+  Genie:              [network, exec, fs:read, fs:write]
+  Oxygen:             [network]
+  Mux:                [network]
+  WebSockets:         [network]
+  Sockets:            [network]
+  # ── Crypto / TLS ─────────────────────────────────────────────────────────
+  MbedTLS:            [network, crypto]
+  OpenSSL:            [network, crypto]
+  Nettle:             [crypto]
+  SHA:                [crypto]
+  Cryptography:       [crypto]
+  JWTs:               [crypto]
+  # ── Filesystem ───────────────────────────────────────────────────────────
+  FileIO:             [fs:read, fs:write]
+  CSV:                [fs:read]
+  XLSX:               [fs:read]
+  JLD2:               [fs:read, fs:write]
+  HDF5:               [fs:read, fs:write]
+  Arrow:              [fs:read, fs:write]
+  Parquet:            [fs:read, fs:write]
+  # ── Database ─────────────────────────────────────────────────────────────
+  SQLite:             [fs:read, fs:write, network]
+  LibPQ:              [network]
+  MySQL:              [network]
+  Mongoc:             [network]
+  Redis:              [network]
+  # ── Execution / package management ───────────────────────────────────────
+  Conda:              [exec, network, fs:read, fs:write]
+  Pkg:                [exec, network, fs:read, fs:write]
+  Distributed:        [exec, network]
+  Threads:            [exec]
+  Base.Threads:       [exec]
+  # ── Plugin / unsafe / FFI ─────────────────────────────────────────────────
+  Libdl:              [plugin, unsafe]
+  Libffi:             [unsafe, plugin]
+  Clang:              [unsafe, reflect]
+  CxxWrap:            [unsafe]
+  BinaryProvider:     [exec, network, fs:read, fs:write]
+  Artifacts:          [fs:read, fs:write]
+  # ── Env ───────────────────────────────────────────────────────────────────
+  ConfigEnv:          [env]
+  DotEnv:             [env]
+  EnvConfig:          [env]
+  # ── Logging ──────────────────────────────────────────────────────────────
+  Logging:            [fs:write]
+  LoggingExtras:      [fs:write, network]
+  # ── Reflection / metaprogramming ─────────────────────────────────────────
+  Cthulhu:            [reflect, plugin]
+  IRTools:            [reflect, plugin]
+  Cassette:           [reflect, plugin]
+
+call_sites:
+  "run(`":            [exec]
+  "run(Cmd(":         [exec]
+  "readchomp(`":      [exec, fs:read]
+  "pipeline(`":       [exec]
+  "open(":            [fs:read, fs:write]
+  "read(":            [fs:read]
+  "write(":           [fs:write]
+  "download(":        [network, fs:write]
+  "HTTP.get(":        [network]
+  "HTTP.post(":       [network]
+  "ENV[":             [env]
+  "get(ENV,":         [env]
+  "ccall(":           [unsafe, plugin]
+  "cglobal(":         [unsafe]
+  "unsafe_load(":     [unsafe]
+  "unsafe_store!(":   [unsafe]
+  "dlopen(":          [plugin]
+  "sha256(":          [crypto]
+  "hmac_sha256(":     [crypto]

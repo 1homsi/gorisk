@@ -1,0 +1,68 @@
+# Capability patterns for Scala
+#
+# Covers sbt dependency declarations (organization:name) and call-site patterns
+# matched in .scala source files. Import patterns are keyed by org:name.
+# Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: scala
+
+imports:
+  # ── HTTP / Network ────────────────────────────────────────────────────────
+  org.http4s:http4s-client:                                    [network]
+  org.http4s:http4s-server:                                    [network]
+  com.softwaremill.sttp.client3:core:                          [network]
+  com.typesafe.akka:akka-http:                                 [network]
+  com.typesafe.akka:akka-actor:                                [exec]
+  com.typesafe.akka:akka-stream:                               [exec, network]
+  com.typesafe.play:play:                                      [network, exec]
+  # ── Database ──────────────────────────────────────────────────────────────
+  org.scalikejdbc:scalikejdbc:                                 [network, fs:read]
+  org.tpolecat:doobie-core:                                    [network, fs:read]
+  io.getquill:quill-jdbc:                                      [network, fs:read]
+  org.postgresql:postgresql:                                   [network]
+  mysql:mysql-connector-java:                                  [network]
+  org.mongodb.scala:mongo-scala-driver:                        [network]
+  # ── JSON / Serialization ──────────────────────────────────────────────────
+  io.circe:circe-core:                                         [fs:read]
+  io.circe:circe-parser:                                       [fs:read]
+  # ── Big Data / Spark ──────────────────────────────────────────────────────
+  io.github.spark-redshift-community:spark-redshift:           [network, fs:read, fs:write]
+  org.apache.spark:spark-core:                                 [exec, network, fs:read, fs:write]
+  org.apache.spark:spark-sql:                                  [exec, network, fs:read, fs:write]
+  # ── ZIO ───────────────────────────────────────────────────────────────────
+  dev.zio:zio:                                                 [exec]
+  dev.zio:zio-streams:                                         [exec, network]
+  # ── Config ────────────────────────────────────────────────────────────────
+  com.typesafe:config:                                         [fs:read, env]
+  # ── Crypto / Auth ─────────────────────────────────────────────────────────
+  org.bouncycastle:bcprov-jdk18on:                             [crypto]
+  io.jsonwebtoken:jjwt-api:                                    [crypto]
+  # ── Reflection ────────────────────────────────────────────────────────────
+  org.reflections:reflections:                                 [reflect]
+  org.scala-lang:scala-reflect:                                [reflect]
+  # ── Native / Unsafe ───────────────────────────────────────────────────────
+  com.sun.jna:jna:                                             [unsafe]
+  # ── Cloud / AWS ───────────────────────────────────────────────────────────
+  software.amazon.awssdk:s3:                                   [network, fs:read, fs:write]
+  com.amazonaws:aws-java-sdk-core:                             [network, fs:read, fs:write, crypto]
+  # ── Logging ───────────────────────────────────────────────────────────────
+  ch.qos.logback:logback-classic:                              [fs:write]
+  com.typesafe.scala-logging:scala-logging:                    [fs:write]
+
+call_sites:
+  "new ProcessBuilder(":            [exec]
+  "Runtime.getRuntime().exec(":     [exec]
+  "sys.process.":                   [exec]
+  "sys.env(":                       [env]
+  "System.getenv(":                 [env]
+  "scala.io.Source.fromFile(":      [fs:read]
+  "new FileOutputStream(":          [fs:write]
+  "new FileInputStream(":           [fs:read]
+  "new URL(":                       [network]
+  "MessageDigest.getInstance(":     [crypto]
+  "Cipher.getInstance(":            [crypto]
+  "Class.forName(":                 [reflect, plugin]
+  "classOf[":                       [reflect]
+  "sun.misc.Unsafe":                [unsafe]

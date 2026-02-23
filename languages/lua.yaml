@@ -1,0 +1,81 @@
+# Capability patterns for Lua
+#
+# Covers require() import statements and call-site patterns matched in .lua
+# source files. Import patterns are matched against LuaRocks package names.
+# Call-site patterns are matched as substrings of each source line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: lua
+
+imports:
+  # ── Network ────────────────────────────────────────────────────────────────
+  socket:               [network]
+  luasocket:            [network]
+  http:                 [network]
+  copas:                [network, exec]
+  nixio:                [network, exec, fs:read]
+  lua-http:             [network]
+  turbo:                [network, exec]
+  luasec:               [network, crypto]
+  # ── Crypto ────────────────────────────────────────────────────────────────
+  luaossl:              [crypto]
+  luacrypto:            [crypto]
+  md5:                  [crypto]
+  sha2:                 [crypto]
+  lua-jwt:              [crypto]
+  # ── Filesystem ────────────────────────────────────────────────────────────
+  lfs:                  [fs:read, fs:write]
+  luafilesystem:        [fs:read, fs:write]
+  penlight:             [fs:read, fs:write, exec]
+  # ── Reflection ────────────────────────────────────────────────────────────
+  inspect:              [reflect]
+  serpent:              [reflect]
+  # ── JSON / data ───────────────────────────────────────────────────────────
+  lua-cjson:            [fs:read]
+  cjson:                [fs:read]
+  dkjson:               [fs:read]
+  json.lua:             [fs:read]
+  lyaml:                [fs:read]
+  # ── Database ──────────────────────────────────────────────────────────────
+  lsqlite3:             [fs:read, fs:write, network]
+  luasql-postgres:      [network]
+  luasql-mysql:         [network]
+  luasql-sqlite3:       [fs:read, fs:write]
+  redis-lua:            [network]
+  lua-resty-redis:      [network]
+  # ── Web / server ──────────────────────────────────────────────────────────
+  openresty:            [network, exec, fs:read, fs:write]
+  nginx:                [network, exec]
+  # ── Exec / concurrency ────────────────────────────────────────────────────
+  lanes:                [exec]
+  llthreads2:           [exec]
+  luaproc:              [exec]
+  # ── Env ───────────────────────────────────────────────────────────────────
+  environment:          [env]
+  lua-dotenv:           [env]
+  # ── Unsafe / FFI / plugin ────────────────────────────────────────────────
+  ffi:                  [unsafe, plugin]
+  cffi-lua:             [unsafe]
+  lua-ffi:              [unsafe, plugin]
+  loadlib:              [plugin]
+
+call_sites:
+  "os.execute(":        [exec]
+  "io.popen(":          [exec, fs:read]
+  "os.getenv(":         [env]
+  "os.setenv(":         [env]
+  "io.open(":           [fs:read, fs:write]
+  "io.read(":           [fs:read]
+  "io.write(":          [fs:write]
+  "socket.connect(":    [network]
+  "socket.tcp(":        [network]
+  "http.request(":      [network]
+  "ffi.load(":          [unsafe, plugin]
+  "ffi.cdef(":          [unsafe]
+  "ffi.cast(":          [unsafe]
+  "package.loadlib(":   [plugin, unsafe]
+  "require(":           [plugin]
+  "load(":              [unsafe, plugin]
+  "loadstring(":        [unsafe, plugin]
+  "dofile(":            [plugin, exec]

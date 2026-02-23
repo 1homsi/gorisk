@@ -1,0 +1,90 @@
+# Capability patterns for OCaml
+#
+# Covers open/import statements and call-site patterns matched in .ml/.mli
+# source files. Import patterns are matched against opam package names
+# (lowercased). Call-site patterns are matched as substrings of each source
+# line.
+#
+# Capabilities: fs:read, fs:write, network, exec, env, unsafe, crypto, reflect, plugin
+
+name: ocaml
+
+imports:
+  # ── Network ────────────────────────────────────────────────────────────────
+  cohttp:                     [network]
+  cohttp-lwt-unix:            [network, exec]
+  cohttp-async:               [network, exec]
+  piaf:                       [network, crypto]
+  httpaf:                     [network]
+  h2:                         [network, crypto]
+  hyper:                      [network]
+  eio:                        [exec, network, fs:read, fs:write]
+  # ── Concurrency / execution ───────────────────────────────────────────────
+  lwt:                        [exec]
+  async:                      [exec]
+  # ── Crypto / TLS ─────────────────────────────────────────────────────────
+  tls:                        [network, crypto]
+  ssl:                        [network, crypto]
+  cryptokit:                  [crypto]
+  mirage-crypto:              [crypto]
+  nocrypto:                   [crypto]
+  jose:                       [crypto]
+  x509:                       [crypto, network]
+  # ── Unsafe / FFI ─────────────────────────────────────────────────────────
+  cstruct:                    [unsafe]
+  bigarray:                   [unsafe]
+  zarith:                     [unsafe]
+  ctypes:                     [unsafe]
+  ctypes-foreign:             [unsafe, plugin]
+  # ── Stdlib / core ────────────────────────────────────────────────────────
+  core:                       [exec, fs:read, fs:write, env]
+  core_unix:                  [exec, fs:read, fs:write, env]
+  base:                       [fs:read]
+  stdio:                      [fs:read, fs:write]
+  # ── Filesystem ───────────────────────────────────────────────────────────
+  fileutils:                  [fs:read, fs:write]
+  csv:                        [fs:read]
+  # ── Serialisation ────────────────────────────────────────────────────────
+  yojson:                     [fs:read]
+  jsonm:                      [fs:read]
+  yaml:                       [fs:read]
+  sexplib:                    [fs:read]
+  # ── Database ─────────────────────────────────────────────────────────────
+  caqti:                      [network, fs:read]
+  caqti-driver-postgresql:    [network]
+  caqti-driver-sqlite3:       [fs:read, fs:write]
+  mysql:                      [network]
+  redis-sync:                 [network]
+  irmin:                      [fs:read, fs:write, network]
+  # ── Logging / output ─────────────────────────────────────────────────────
+  logs:                       [fs:write]
+  fmt:                        [fs:write]
+  # ── Reflection ───────────────────────────────────────────────────────────
+  ppx_deriving:               [reflect]
+  typerep:                    [reflect]
+  # ── Plugin / dynamic loading ─────────────────────────────────────────────
+  dynlink:                    [plugin, unsafe]
+  dl:                         [plugin, unsafe]
+  # ── Env / time ───────────────────────────────────────────────────────────
+  mtime:                      [env]
+  # ── Standard library modules (treated as packages) ───────────────────────
+  sys:                        [exec, env, fs:read]
+  unix:                       [exec, fs:read, fs:write, network, env]
+
+call_sites:
+  "Unix.system ":             [exec]
+  "Unix.create_process ":     [exec]
+  "Sys.command ":             [exec]
+  "Unix.getenv ":             [env]
+  "Sys.getenv ":              [env]
+  "open_in ":                 [fs:read]
+  "open_out ":                [fs:write]
+  "Unix.openfile ":           [fs:read, fs:write]
+  "Unix.socket ":             [network]
+  "Unix.connect ":            [network]
+  "Digest.file ":             [crypto]
+  "Digest.string ":           [crypto]
+  "Dlopen ":                  [plugin, unsafe]
+  "Dynlink.loadfile ":        [plugin]
+  "Obj.magic ":               [unsafe]
+  "Obj.repr ":                [unsafe]

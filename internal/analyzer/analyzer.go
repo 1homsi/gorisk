@@ -8,15 +8,27 @@ import (
 	"path/filepath"
 	"strings"
 
+	clojureadapter "github.com/1homsi/gorisk/internal/adapters/clojure"
+	cppadapter "github.com/1homsi/gorisk/internal/adapters/cpp"
 	dartadapter "github.com/1homsi/gorisk/internal/adapters/dart"
+	dotnetadapter "github.com/1homsi/gorisk/internal/adapters/dotnet"
 	elixiradapter "github.com/1homsi/gorisk/internal/adapters/elixir"
+	erlangadapter "github.com/1homsi/gorisk/internal/adapters/erlang"
 	goadapter "github.com/1homsi/gorisk/internal/adapters/go"
+	haskelladapter "github.com/1homsi/gorisk/internal/adapters/haskell"
 	javaadapter "github.com/1homsi/gorisk/internal/adapters/java"
+	juliaadapter "github.com/1homsi/gorisk/internal/adapters/julia"
+	kotlinadapter "github.com/1homsi/gorisk/internal/adapters/kotlin"
+	luaadapter "github.com/1homsi/gorisk/internal/adapters/lua"
 	nodeadapter "github.com/1homsi/gorisk/internal/adapters/node"
+	ocamladapter "github.com/1homsi/gorisk/internal/adapters/ocaml"
+	perladapter "github.com/1homsi/gorisk/internal/adapters/perl"
 	phpadapter "github.com/1homsi/gorisk/internal/adapters/php"
 	pythonadapter "github.com/1homsi/gorisk/internal/adapters/python"
+	radapter "github.com/1homsi/gorisk/internal/adapters/r"
 	rubyadapter "github.com/1homsi/gorisk/internal/adapters/ruby"
 	rustadapter "github.com/1homsi/gorisk/internal/adapters/rust"
+	scalaadapter "github.com/1homsi/gorisk/internal/adapters/scala"
 	swiftadapter "github.com/1homsi/gorisk/internal/adapters/swift"
 	"github.com/1homsi/gorisk/internal/graph"
 	"github.com/1homsi/gorisk/internal/prdiff"
@@ -51,13 +63,120 @@ var registry = map[string]LangFeatures{
 		PRDiff:       prdiff.PHPDiffer{},
 		Reachability: reachability.PHPAnalyzer{},
 	},
-	"python": {},
-	"java":   {},
-	"rust":   {},
-	"ruby":   {},
-	"elixir": {},
-	"swift":  {},
-	"dart":   {},
+	"python": {
+		Upgrade:      upgrade.PythonUpgrader{},
+		CapDiff:      upgrade.PythonCapDiffer{},
+		PRDiff:       prdiff.PythonDiffer{},
+		Reachability: reachability.PythonAnalyzer{},
+	},
+	"java": {
+		Upgrade:      upgrade.JavaUpgrader{},
+		CapDiff:      upgrade.JavaCapDiffer{},
+		PRDiff:       prdiff.JavaDiffer{},
+		Reachability: reachability.JavaAnalyzer{},
+	},
+	"rust": {
+		Upgrade:      upgrade.RustUpgrader{},
+		CapDiff:      upgrade.RustCapDiffer{},
+		PRDiff:       prdiff.RustDiffer{},
+		Reachability: reachability.RustAnalyzer{},
+	},
+	"ruby": {
+		Upgrade:      upgrade.RubyUpgrader{},
+		CapDiff:      upgrade.RubyCapDiffer{},
+		PRDiff:       prdiff.RubyDiffer{},
+		Reachability: reachability.RubyAnalyzer{},
+	},
+	"elixir": {
+		Upgrade:      upgrade.ElixirUpgrader{},
+		CapDiff:      upgrade.ElixirCapDiffer{},
+		PRDiff:       prdiff.ElixirDiffer{},
+		Reachability: reachability.ElixirAnalyzer{},
+	},
+	"swift": {
+		Upgrade:      upgrade.SwiftUpgrader{},
+		CapDiff:      upgrade.SwiftCapDiffer{},
+		PRDiff:       prdiff.SwiftDiffer{},
+		Reachability: reachability.SwiftAnalyzer{},
+	},
+	"dart": {
+		Upgrade:      upgrade.DartUpgrader{},
+		CapDiff:      upgrade.DartCapDiffer{},
+		PRDiff:       prdiff.DartDiffer{},
+		Reachability: reachability.DartAnalyzer{},
+	},
+	"dotnet": {
+		Upgrade:      upgrade.DotnetUpgrader{},
+		CapDiff:      upgrade.DotnetCapDiffer{},
+		PRDiff:       prdiff.DotnetDiffer{},
+		Reachability: reachability.DotnetAnalyzer{},
+	},
+	"kotlin": {
+		Upgrade:      upgrade.KotlinUpgrader{},
+		CapDiff:      upgrade.KotlinCapDiffer{},
+		PRDiff:       prdiff.KotlinDiffer{},
+		Reachability: reachability.KotlinAnalyzer{},
+	},
+	"scala": {
+		Upgrade:      upgrade.ScalaUpgrader{},
+		CapDiff:      upgrade.ScalaCapDiffer{},
+		PRDiff:       prdiff.ScalaDiffer{},
+		Reachability: reachability.ScalaAnalyzer{},
+	},
+	"cpp": {
+		Upgrade:      upgrade.CppUpgrader{},
+		CapDiff:      upgrade.CppCapDiffer{},
+		PRDiff:       prdiff.CppDiffer{},
+		Reachability: reachability.CppAnalyzer{},
+	},
+	"haskell": {
+		Upgrade:      upgrade.HaskellUpgrader{},
+		CapDiff:      upgrade.HaskellCapDiffer{},
+		PRDiff:       prdiff.HaskellDiffer{},
+		Reachability: reachability.HaskellAnalyzer{},
+	},
+	"clojure": {
+		Upgrade:      upgrade.ClojureUpgrader{},
+		CapDiff:      upgrade.ClojureCapDiffer{},
+		PRDiff:       prdiff.ClojureDiffer{},
+		Reachability: reachability.ClojureAnalyzer{},
+	},
+	"erlang": {
+		Upgrade:      upgrade.ErlangUpgrader{},
+		CapDiff:      upgrade.ErlangCapDiffer{},
+		PRDiff:       prdiff.ErlangDiffer{},
+		Reachability: reachability.ErlangAnalyzer{},
+	},
+	"ocaml": {
+		Upgrade:      upgrade.OCamlUpgrader{},
+		CapDiff:      upgrade.OCamlCapDiffer{},
+		PRDiff:       prdiff.OCamlDiffer{},
+		Reachability: reachability.OCamlAnalyzer{},
+	},
+	"julia": {
+		Upgrade:      upgrade.JuliaUpgrader{},
+		CapDiff:      upgrade.JuliaCapDiffer{},
+		PRDiff:       prdiff.JuliaDiffer{},
+		Reachability: reachability.JuliaAnalyzer{},
+	},
+	"r": {
+		Upgrade:      upgrade.RUpgrader{},
+		CapDiff:      upgrade.RCapDiffer{},
+		PRDiff:       prdiff.RDiffer{},
+		Reachability: reachability.RAnalyzer{},
+	},
+	"perl": {
+		Upgrade:      upgrade.PerlUpgrader{},
+		CapDiff:      upgrade.PerlCapDiffer{},
+		PRDiff:       prdiff.PerlDiffer{},
+		Reachability: reachability.PerlAnalyzer{},
+	},
+	"lua": {
+		Upgrade:      upgrade.LuaUpgrader{},
+		CapDiff:      upgrade.LuaCapDiffer{},
+		PRDiff:       prdiff.LuaDiffer{},
+		Reachability: reachability.LuaAnalyzer{},
+	},
 }
 
 // FeaturesFor returns the feature implementations for the given language.
@@ -71,7 +190,7 @@ func FeaturesFor(lang, dir string) (LangFeatures, error) {
 	}
 	f, ok := registry[lang]
 	if !ok {
-		return LangFeatures{}, fmt.Errorf("unknown language %q; choose auto|go|node|php|python|java|rust|ruby|elixir|dart|swift", lang)
+		return LangFeatures{}, fmt.Errorf("unknown language %q; choose auto|go|node|php|python|java|rust|ruby|elixir|dart|swift|dotnet|kotlin|scala|cpp|haskell|clojure|erlang|ocaml|julia|r|perl|lua", lang)
 	}
 	return f, nil
 }
@@ -83,9 +202,10 @@ type Analyzer interface {
 }
 
 // ForLang returns an Analyzer for the given language specifier.
-// lang may be "auto", "go", "node", "php", "python", "java", "rust", or "ruby".
-// "auto" detects from go.mod / package.json / composer.json / requirements.txt /
-// pom.xml / Cargo.toml / Gemfile presence.
+// lang may be "auto", "go", "node", "php", "python", "java", "rust", "ruby",
+// "elixir", "dart", "swift", "dotnet", "kotlin", "scala", "cpp", "haskell",
+// "clojure", "erlang", "ocaml", "julia", "r", "perl", or "lua".
+// "auto" detects from lockfile / manifest presence.
 func ForLang(lang, dir string) (Analyzer, error) {
 	if lang == "auto" {
 		lang = detect(dir)
@@ -111,10 +231,34 @@ func ForLang(lang, dir string) (Analyzer, error) {
 		return elixiradapter.Adapter{}, nil
 	case "swift":
 		return &swiftadapter.Adapter{}, nil
+	case "dotnet":
+		return &dotnetadapter.Adapter{}, nil
+	case "kotlin":
+		return &kotlinadapter.Adapter{}, nil
+	case "scala":
+		return &scalaadapter.Adapter{}, nil
+	case "cpp":
+		return &cppadapter.Adapter{}, nil
+	case "haskell":
+		return &haskelladapter.Adapter{}, nil
+	case "clojure":
+		return &clojureadapter.Adapter{}, nil
+	case "erlang":
+		return &erlangadapter.Adapter{}, nil
+	case "ocaml":
+		return &ocamladapter.Adapter{}, nil
+	case "julia":
+		return &juliaadapter.Adapter{}, nil
+	case "r":
+		return &radapter.Adapter{}, nil
+	case "perl":
+		return &perladapter.Adapter{}, nil
+	case "lua":
+		return &luaadapter.Adapter{}, nil
 	case "multi":
 		return &multiAnalyzer{}, nil
 	default:
-		return nil, fmt.Errorf("unknown language %q; choose auto|go|node|php|python|java|rust|ruby|elixir|dart|swift", lang)
+		return nil, fmt.Errorf("unknown language %q; choose auto|go|node|php|python|java|rust|ruby|elixir|dart|swift|dotnet|kotlin|scala|cpp|haskell|clojure|erlang|ocaml|julia|r|perl|lua", lang)
 	}
 }
 
@@ -129,7 +273,8 @@ func detect(dir string) string {
 	hasRequirementsTxt := fileExists(filepath.Join(dir, "requirements.txt"))
 	hasPomXML := fileExists(filepath.Join(dir, "pom.xml"))
 	hasGradleLock := fileExists(filepath.Join(dir, "gradle.lockfile"))
-	hasBuildGradle := fileExists(filepath.Join(dir, "build.gradle")) || fileExists(filepath.Join(dir, "build.gradle.kts"))
+	hasBuildGradleKts := fileExists(filepath.Join(dir, "build.gradle.kts"))
+	hasBuildGradle := fileExists(filepath.Join(dir, "build.gradle")) || hasBuildGradleKts
 	hasCargoToml := fileExists(filepath.Join(dir, "Cargo.toml"))
 	hasGemfileLock := fileExists(filepath.Join(dir, "Gemfile.lock"))
 	hasGemfile := fileExists(filepath.Join(dir, "Gemfile"))
@@ -139,14 +284,76 @@ func detect(dir string) string {
 	hasMixExs := fileExists(filepath.Join(dir, "mix.exs"))
 	hasPackageResolved := fileExists(filepath.Join(dir, "Package.resolved"))
 	hasPackageSwift := fileExists(filepath.Join(dir, "Package.swift"))
+	// .NET
+	hasPackagesLockJSON := fileExists(filepath.Join(dir, "packages.lock.json"))
+	hasCsprojGlob := func() bool {
+		matches, _ := filepath.Glob(filepath.Join(dir, "*.csproj"))
+		return len(matches) > 0
+	}()
+	// Kotlin — libs.versions.toml or build.gradle.kts distinguish from plain Java
+	hasLibsVersionsToml := fileExists(filepath.Join(dir, "libs.versions.toml")) ||
+		fileExists(filepath.Join(dir, "gradle", "libs.versions.toml"))
+	// Scala
+	hasBuildSbt := fileExists(filepath.Join(dir, "build.sbt"))
+	// C/C++
+	hasVcpkgJSON := fileExists(filepath.Join(dir, "vcpkg.json"))
+	hasConanfile := fileExists(filepath.Join(dir, "conanfile.py")) || fileExists(filepath.Join(dir, "conanfile.txt"))
+	// Haskell
+	hasCabalFreeze := fileExists(filepath.Join(dir, "cabal.project.freeze"))
+	hasStackLock := fileExists(filepath.Join(dir, "stack.yaml.lock"))
+	hasCabalGlob := func() bool {
+		matches, _ := filepath.Glob(filepath.Join(dir, "*.cabal"))
+		return len(matches) > 0
+	}()
+	// Clojure
+	hasDepsEdn := fileExists(filepath.Join(dir, "deps.edn"))
+	hasProjectClj := fileExists(filepath.Join(dir, "project.clj"))
+	// Erlang
+	hasRebarLock := fileExists(filepath.Join(dir, "rebar.lock"))
+	hasRebarConfig := fileExists(filepath.Join(dir, "rebar.config"))
+	// OCaml
+	hasOpamLocked := func() bool {
+		matches, _ := filepath.Glob(filepath.Join(dir, "*.opam.locked"))
+		return len(matches) > 0 || fileExists(filepath.Join(dir, "opam.locked"))
+	}()
+	hasOpamFile := func() bool {
+		matches, _ := filepath.Glob(filepath.Join(dir, "*.opam"))
+		return len(matches) > 0
+	}()
+	// Julia
+	hasManifestToml := fileExists(filepath.Join(dir, "Manifest.toml"))
+	// R
+	hasRenvLock := fileExists(filepath.Join(dir, "renv.lock"))
+	hasDescription := fileExists(filepath.Join(dir, "DESCRIPTION"))
+	// Perl
+	hasCpanfileSnapshot := fileExists(filepath.Join(dir, "cpanfile.snapshot"))
+	hasCpanfile := fileExists(filepath.Join(dir, "cpanfile"))
+	// Lua
+	hasLuarocksLock := fileExists(filepath.Join(dir, "luarocks.lock"))
+	hasRockspec := func() bool {
+		matches, _ := filepath.Glob(filepath.Join(dir, "*.rockspec"))
+		return len(matches) > 0
+	}()
 
 	isPython := hasPyprojectTOML || hasPoetryLock || hasPipfileLock || hasRequirementsTxt
-	isJava := hasPomXML || hasGradleLock || hasBuildGradle
+	isKotlin := hasLibsVersionsToml || hasBuildGradleKts
+	isJava := !isKotlin && (hasPomXML || hasGradleLock || hasBuildGradle)
 	isRust := hasCargoToml
 	isRuby := hasGemfileLock || hasGemfile
 	isDart := hasPubspecLock || hasPubspecYAML
 	isElixir := hasMixLock || hasMixExs
 	isSwift := hasPackageResolved || hasPackageSwift
+	isDotnet := hasPackagesLockJSON || hasCsprojGlob
+	isScala := hasBuildSbt
+	isCpp := hasVcpkgJSON || hasConanfile
+	isHaskell := hasCabalFreeze || hasStackLock || hasCabalGlob
+	isClojure := hasDepsEdn || hasProjectClj
+	isErlang := hasRebarLock || hasRebarConfig
+	isOCaml := hasOpamLocked || hasOpamFile
+	isJulia := hasManifestToml
+	isR := hasRenvLock || hasDescription
+	isPerl := hasCpanfileSnapshot || hasCpanfile
+	isLua := hasLuarocksLock || hasRockspec
 
 	switch {
 	case hasGoMod && hasPkgJSON:
@@ -159,6 +366,8 @@ func detect(dir string) string {
 		return "php"
 	case isPython:
 		return "python"
+	case isKotlin:
+		return "kotlin"
 	case isJava:
 		return "java"
 	case isRust:
@@ -171,6 +380,28 @@ func detect(dir string) string {
 		return "elixir"
 	case isSwift:
 		return "swift"
+	case isDotnet:
+		return "dotnet"
+	case isScala:
+		return "scala"
+	case isCpp:
+		return "cpp"
+	case isHaskell:
+		return "haskell"
+	case isClojure:
+		return "clojure"
+	case isErlang:
+		return "erlang"
+	case isOCaml:
+		return "ocaml"
+	case isJulia:
+		return "julia"
+	case isR:
+		return "r"
+	case isPerl:
+		return "perl"
+	case isLua:
+		return "lua"
 	default:
 		return "go"
 	}
