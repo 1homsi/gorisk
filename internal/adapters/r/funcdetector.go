@@ -37,8 +37,8 @@ type RFunction struct {
 }
 
 // DetectFunctions parses R source files in dir and returns per-function
-// capability sets and call edges.
-func DetectFunctions(dir string, files []string) (map[string]ir.FunctionCaps, []ir.CallEdge, error) {
+// capability sets and call edges. pkgName is used as the Symbol.Package value.
+func DetectFunctions(dir, pkgName string, files []string) (map[string]ir.FunctionCaps, []ir.CallEdge, error) {
 	funcs := make(map[string]ir.FunctionCaps)
 	var edges []ir.CallEdge
 
@@ -53,7 +53,7 @@ func DetectFunctions(dir string, files []string) (map[string]ir.FunctionCaps, []
 
 		for _, fn := range fileFuncs {
 			sym := ir.Symbol{
-				Package: dir,
+				Package: pkgName,
 				Name:    fn.Name,
 				Kind:    "function",
 			}
@@ -69,7 +69,7 @@ func DetectFunctions(dir string, files []string) (map[string]ir.FunctionCaps, []
 			calls := findRCalls(fn.Body)
 			for _, callee := range calls {
 				calleeSym := ir.Symbol{
-					Package: dir,
+					Package: pkgName,
 					Name:    callee,
 					Kind:    "function",
 				}

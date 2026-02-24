@@ -4,6 +4,8 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+
+	"strings"
 )
 
 func TestDetectFunctions(t *testing.T) {
@@ -81,19 +83,19 @@ function processData() {
 	foundHashPassword := false
 
 	for _, fc := range funcs {
-		if fc.Symbol.Name == "runCommand" {
+		if strings.HasSuffix(fc.Symbol.Name, "::runCommand") {
 			foundRunCommand = true
 			if !fc.DirectCaps.Has("exec") {
 				t.Error("runCommand should have exec capability")
 			}
 		}
-		if fc.Symbol.Name == "readConfig" {
+		if strings.HasSuffix(fc.Symbol.Name, "::readConfig") {
 			foundReadConfig = true
 			if !fc.DirectCaps.Has("fs:read") {
 				t.Error("readConfig should have fs:read capability")
 			}
 		}
-		if fc.Symbol.Name == "hashPassword" {
+		if strings.HasSuffix(fc.Symbol.Name, "::hashPassword") {
 			foundHashPassword = true
 			if !fc.DirectCaps.Has("crypto") {
 				t.Error("hashPassword should have crypto capability")
@@ -120,7 +122,7 @@ function processData() {
 	// Verify processData calls other functions
 	foundProcessDataEdge := false
 	for _, edge := range edges {
-		if edge.Caller.Name == "processData" {
+		if strings.HasSuffix(edge.Caller.Name, "::processData") {
 			foundProcessDataEdge = true
 			t.Logf("processData calls: %s", edge.Callee.Name)
 		}

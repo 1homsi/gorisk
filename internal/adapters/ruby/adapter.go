@@ -3,6 +3,7 @@
 package ruby
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
 	"strings"
@@ -136,15 +137,34 @@ func buildRubyFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
 		if pkg.Dir == "" {
 			continue
 		}
-		files, _ := filepath.Glob(filepath.Join(pkg.Dir, "*.rb")) //nolint:errcheck
-		if len(files) == 0 {
+
+		var relFiles []string
+		_ = filepath.WalkDir(pkg.Dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				name := d.Name()
+				if name == "vendor" || name == "node_modules" || (len(name) > 0 && name[0] == '.') {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			ext := strings.ToLower(filepath.Ext(path))
+			if ext == ".rb" {
+				rel, relErr := filepath.Rel(pkg.Dir, path)
+				if relErr == nil {
+					relFiles = append(relFiles, rel)
+				}
+			}
+			return nil
+		})
+
+		if len(relFiles) == 0 {
 			continue
 		}
-		var names []string
-		for _, f := range files {
-			names = append(names, filepath.Base(f))
-		}
-		funcs, edges, err := DetectFunctions(pkg.Dir, names)
+
+		funcs, edges, err := DetectFunctions(pkg.Dir, pkg.ImportPath, relFiles)
 		if err != nil {
 			continue
 		}

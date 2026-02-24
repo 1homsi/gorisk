@@ -2,8 +2,10 @@
 package kotlin
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
@@ -125,25 +127,33 @@ func buildKotlinFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
 			continue
 		}
 
-		ktFiles, err := filepath.Glob(filepath.Join(pkg.Dir, "*.kt"))
-		if err != nil {
+		var relFiles []string
+		_ = filepath.WalkDir(pkg.Dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				name := d.Name()
+				if name == "vendor" || name == "target" || name == "build" || (len(name) > 0 && name[0] == '.') {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			ext := strings.ToLower(filepath.Ext(path))
+			if ext == ".kt" || ext == ".kts" {
+				rel, relErr := filepath.Rel(pkg.Dir, path)
+				if relErr == nil {
+					relFiles = append(relFiles, rel)
+				}
+			}
+			return nil
+		})
+
+		if len(relFiles) == 0 {
 			continue
 		}
-		ktsFiles, err2 := filepath.Glob(filepath.Join(pkg.Dir, "*.kts"))
-		if err2 == nil {
-			ktFiles = append(ktFiles, ktsFiles...)
-		}
 
-		if len(ktFiles) == 0 {
-			continue
-		}
-
-		var names []string
-		for _, f := range ktFiles {
-			names = append(names, filepath.Base(f))
-		}
-
-		funcs, edges, _ := DetectFunctions(pkg.Dir, names)
+		funcs, edges, _ := DetectFunctions(pkg.Dir, pkg.ImportPath, relFiles)
 		for k, fc := range funcs {
 			irGraph.Functions[k] = fc
 		}

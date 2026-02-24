@@ -32,7 +32,7 @@ var rbBlockOpeners = regexp.MustCompile(
 
 // DetectFunctions parses Ruby files and returns per-function capability sets
 // and call edges.
-func DetectFunctions(dir string, files []string) (map[string]ir.FunctionCaps, []ir.CallEdge, error) {
+func DetectFunctions(dir, pkgName string, files []string) (map[string]ir.FunctionCaps, []ir.CallEdge, error) {
 	funcs := make(map[string]ir.FunctionCaps)
 	var edges []ir.CallEdge
 
@@ -47,7 +47,7 @@ func DetectFunctions(dir string, files []string) (map[string]ir.FunctionCaps, []
 
 		for _, fn := range fileFuncs {
 			sym := ir.Symbol{
-				Package: dir,
+				Package: pkgName,
 				Name:    fn.Name,
 				Kind:    "function",
 			}
@@ -64,7 +64,7 @@ func DetectFunctions(dir string, files []string) (map[string]ir.FunctionCaps, []
 				edges = append(edges, ir.CallEdge{
 					Caller: sym,
 					Callee: ir.Symbol{
-						Package: dir,
+						Package: pkgName,
 						Name:    callee,
 						Kind:    "function",
 					},

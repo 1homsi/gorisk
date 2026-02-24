@@ -44,7 +44,7 @@ var skipDotnetKeywords = map[string]bool{
 
 // DetectFunctions parses C# source files and returns per-function
 // capability sets and call edges.
-func DetectFunctions(dir string, files []string) (map[string]ir.FunctionCaps, []ir.CallEdge, error) {
+func DetectFunctions(dir, pkgName string, files []string) (map[string]ir.FunctionCaps, []ir.CallEdge, error) {
 	funcs := make(map[string]ir.FunctionCaps)
 	var edges []ir.CallEdge
 
@@ -59,7 +59,7 @@ func DetectFunctions(dir string, files []string) (map[string]ir.FunctionCaps, []
 
 		for _, fn := range fileFuncs {
 			sym := ir.Symbol{
-				Package: dir,
+				Package: pkgName,
 				Name:    fn.Name,
 				Kind:    "function",
 			}
@@ -75,7 +75,7 @@ func DetectFunctions(dir string, files []string) (map[string]ir.FunctionCaps, []
 			calls := findDotnetCalls(fn.Body)
 			for _, calleeName := range calls {
 				calleeSym := ir.Symbol{
-					Package: dir,
+					Package: pkgName,
 					Name:    calleeName,
 					Kind:    "function",
 				}

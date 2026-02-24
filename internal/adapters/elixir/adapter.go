@@ -1,6 +1,7 @@
 package elixir
 
 import (
+	"io/fs"
 	"path/filepath"
 	"strings"
 
@@ -125,22 +126,32 @@ func buildElixirFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
 			continue
 		}
 
-		var files []string
-		for _, pat := range []string{"*.ex", "*.exs"} {
-			fs, _ := filepath.Glob(filepath.Join(pkg.Dir, pat))
-			files = append(files, fs...)
-		}
-
-		if len(files) == 0 {
+		var relFiles []string
+		_ = filepath.WalkDir(pkg.Dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				name := d.Name()
+				if name == "_build" || name == "deps" || (len(name) > 0 && name[0] == '.') {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			ext := strings.ToLower(filepath.Ext(path))
+			if ext == ".ex" || ext == ".exs" {
+				rel, relErr := filepath.Rel(pkg.Dir, path)
+				if relErr == nil {
+					relFiles = append(relFiles, rel)
+				}
+			}
+			return nil
+		})
+		if len(relFiles) == 0 {
 			continue
 		}
 
-		var names []string
-		for _, f := range files {
-			names = append(names, filepath.Base(f))
-		}
-
-		funcs, edges, _ := DetectFunctions(pkg.Dir, names)
+		funcs, edges, _ := DetectFunctions(pkg.Dir, pkg.ImportPath, relFiles)
 		for k, fc := range funcs {
 			irGraph.Functions[k] = fc
 		}

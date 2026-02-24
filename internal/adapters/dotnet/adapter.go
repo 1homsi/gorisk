@@ -3,8 +3,10 @@
 package dotnet
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
@@ -115,7 +117,7 @@ func BuildIRGraph(g *graph.DependencyGraph) ir.IRGraph {
 }
 
 // buildDotnetFunctionIRGraph converts packages into a function-level IRGraph
-// by parsing .cs source files in each package directory.
+// by recursively parsing .cs source files in each package directory.
 func buildDotnetFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
 	irGraph := ir.IRGraph{
 		Functions: make(map[string]ir.FunctionCaps),
@@ -127,17 +129,30 @@ func buildDotnetFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
 			continue
 		}
 
-		files, err := filepath.Glob(filepath.Join(pkg.Dir, "*.cs"))
-		if err != nil || len(files) == 0 {
+		var relFiles []string
+		_ = filepath.WalkDir(pkg.Dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				n := d.Name()
+				if n == "bin" || n == "obj" || n == ".vs" || (len(n) > 0 && n[0] == '.') {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if strings.ToLower(filepath.Ext(path)) == ".cs" {
+				if rel, e := filepath.Rel(pkg.Dir, path); e == nil {
+					relFiles = append(relFiles, rel)
+				}
+			}
+			return nil
+		})
+		if len(relFiles) == 0 {
 			continue
 		}
 
-		var names []string
-		for _, f := range files {
-			names = append(names, filepath.Base(f))
-		}
-
-		funcs, edges, _ := DetectFunctions(pkg.Dir, names)
+		funcs, edges, _ := DetectFunctions(pkg.Dir, pkg.ImportPath, relFiles)
 		for k, fc := range funcs {
 			irGraph.Functions[k] = fc
 		}

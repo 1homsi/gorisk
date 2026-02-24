@@ -1,7 +1,9 @@
 package perl
 
 import (
+	"io/fs"
 	"path/filepath"
+	"strings"
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
@@ -101,34 +103,50 @@ func applyPerlImportCaps(pPkg PerlPackage, pkg *graph.Package) {
 }
 
 // BuildIRGraph constructs a function-level IR graph from a DependencyGraph by
-// parsing Perl source files in each package directory.
+// recursively parsing Perl source files in each package directory.
 func BuildIRGraph(g *graph.DependencyGraph) ir.IRGraph {
 	return buildPerlFunctionIRGraph(g)
 }
 
 func buildPerlFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
 	irGraph := ir.IRGraph{Functions: make(map[string]ir.FunctionCaps), Calls: []ir.CallEdge{}}
+
+	perlExts := map[string]bool{".pl": true, ".pm": true, ".t": true}
+
 	for _, pkg := range g.Packages {
 		if pkg.Dir == "" {
 			continue
 		}
-		var files []string
-		for _, pat := range []string{"*.pl", "*.pm", "*.t"} {
-			fs, _ := filepath.Glob(filepath.Join(pkg.Dir, pat))
-			files = append(files, fs...)
-		}
-		if len(files) == 0 {
+
+		var relFiles []string
+		_ = filepath.WalkDir(pkg.Dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				n := d.Name()
+				if n == "blib" || n == ".build" || (len(n) > 0 && n[0] == '.') {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			if perlExts[strings.ToLower(filepath.Ext(path))] {
+				if rel, e := filepath.Rel(pkg.Dir, path); e == nil {
+					relFiles = append(relFiles, rel)
+				}
+			}
+			return nil
+		})
+		if len(relFiles) == 0 {
 			continue
 		}
-		var names []string
-		for _, f := range files {
-			names = append(names, filepath.Base(f))
-		}
-		funcs, edges, _ := DetectFunctions(pkg.Dir, names)
+
+		funcs, edges, _ := DetectFunctions(pkg.Dir, pkg.ImportPath, relFiles)
 		for k, fc := range funcs {
 			irGraph.Functions[k] = fc
 		}
 		irGraph.Calls = append(irGraph.Calls, edges...)
 	}
+
 	return irGraph
 }

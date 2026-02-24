@@ -3,8 +3,10 @@
 package rust
 
 import (
+	"io/fs"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/1homsi/gorisk/internal/capability"
 	"github.com/1homsi/gorisk/internal/graph"
@@ -126,17 +128,33 @@ func buildRustFunctionIRGraph(g *graph.DependencyGraph) ir.IRGraph {
 			continue
 		}
 
-		files, _ := filepath.Glob(filepath.Join(pkg.Dir, "*.rs"))
-		if len(files) == 0 {
+		var relFiles []string
+		_ = filepath.WalkDir(pkg.Dir, func(path string, d fs.DirEntry, err error) error {
+			if err != nil {
+				return nil
+			}
+			if d.IsDir() {
+				name := d.Name()
+				if name == "vendor" || name == "target" || name == "build" || (len(name) > 0 && name[0] == '.') {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			ext := strings.ToLower(filepath.Ext(path))
+			if ext == ".rs" {
+				rel, relErr := filepath.Rel(pkg.Dir, path)
+				if relErr == nil {
+					relFiles = append(relFiles, rel)
+				}
+			}
+			return nil
+		})
+
+		if len(relFiles) == 0 {
 			continue
 		}
 
-		var names []string
-		for _, f := range files {
-			names = append(names, filepath.Base(f))
-		}
-
-		funcs, edges, _ := DetectFunctions(pkg.Dir, names)
+		funcs, edges, _ := DetectFunctions(pkg.Dir, pkg.ImportPath, relFiles)
 		for k, fc := range funcs {
 			irGraph.Functions[k] = fc
 		}
