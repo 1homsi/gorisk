@@ -78,18 +78,22 @@ func Run(args []string) int {
 			Risk             string   `json:"risk"`
 			Score            int      `json:"score"`
 			Caps             []string `json:"capabilities"`
-			ASTReachableHint bool     `json:"ast_reachable_hint,omitempty"`
+			ASTReachableHint *bool    `json:"ast_reachable_hint"` // null=no hint, true/false=known
 			ASTTaintFlows    int      `json:"ast_taint_flows,omitempty"`
 		}
 		var out []jsonEntry
 		for _, r := range filtered {
+			var astHint *bool
+			if v, ok := hints[r.Package]; ok {
+				astHint = &v
+			}
 			out = append(out, jsonEntry{
 				Package:          r.Package,
 				Reachable:        r.Reachable,
 				Risk:             r.ReachableCaps.RiskLevel(),
 				Score:            r.ReachableCaps.Score,
 				Caps:             r.ReachableCaps.List(),
-				ASTReachableHint: hints[r.Package],
+				ASTReachableHint: astHint,
 				ASTTaintFlows:    flowCount[r.Package],
 			})
 		}

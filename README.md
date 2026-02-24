@@ -1,6 +1,6 @@
 # gorisk
 
-<img src="assets/gorisk.png" alt="gorisk" width="480"/>
+<img src="assets/gorisk.png" alt="gorisk" width="320"/>
 
 **Behavioral supply-chain risk intelligence from code structure.**
 Maps what your dependencies *can do* — network access, exec, filesystem writes, unsafe pointers — not just what CVEs they carry.

@@ -61,6 +61,26 @@ func Run(args []string) int {
 		moduleTaints[mod] = append(moduleTaints[mod], tf)
 	}
 
+	// Aggregate package-level ReachabilityHints to module-level before scoring.
+	// ReachabilityHints is keyed by package path; r.Module is a module path —
+	// these are different key spaces. A module is "reachable" if any of its
+	// packages are reachable; "unreachable" if some were analysed but none
+	// reachable; nil (unknown) if no packages from that module appear in hints.
+	type modReachState struct{ seen, reachable bool }
+	modReach := make(map[string]modReachState)
+	if astResult.UsedInterproc {
+		for pkg, pkgReach := range astResult.Bundle.ReachabilityHints {
+			if p := g.Packages[pkg]; p != nil && p.Module != nil {
+				s := modReach[p.Module.Path]
+				s.seen = true
+				if pkgReach {
+					s.reachable = true
+				}
+				modReach[p.Module.Path] = s
+			}
+		}
+	}
+
 	risks := transitive.ComputeTransitiveRisk(g)
 
 	// Augment risks with composite scores
@@ -82,10 +102,9 @@ func Run(args []string) int {
 		}
 
 		var reachable *bool
-		if astResult.UsedInterproc {
-			if v, ok := astResult.Bundle.ReachabilityHints[r.Module]; ok {
-				reachable = &v
-			}
+		if s, ok := modReach[r.Module]; ok {
+			v := s.reachable
+			reachable = &v
 		}
 		final := priority.ComputeFinal(
 			maxCaps,
